@@ -1,16 +1,48 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { renderHtml, renderText } from "./digest.ts";
+import { HistoryStore } from "./historyStore.ts";
 import { scout } from "./scout.ts";
+import { GeminiSource } from "./sources/gemini.ts";
 import { MockSource } from "./sources/mock.ts";
 import { buildWatchSpec } from "./spec.ts";
+import type { PriceSource } from "./types.ts";
 
-const query = process.argv.slice(2).join(" ") || "I need a 2-input USB audio interface with phantom power for home recording, under ₹15k";
+// Usage: npm run demo -- [--live] [--seed-demo] "your request"
+//   --live       discover real products with Gemini + Google Search (needs GEMINI_API_KEY)
+//   --seed-demo  DEMO ONLY: backfill synthetic price history for newly found products
+const args = process.argv.slice(2);
+const live = args.includes("--live");
+const seedDemo = args.includes("--seed-demo");
+const query =
+  args.filter((a) => !a.startsWith("--")).join(" ") ||
+  "I need a 2-input USB audio interface with phantom power for home recording, under ₹15k";
 
 const { spec, via } = await buildWatchSpec(query);
 console.log(`Watch spec (via ${via}):`);
 console.log(JSON.stringify(spec, null, 2), "\n");
 
-const items = await scout(spec, new MockSource());
+let source: PriceSource = new MockSource();
+let store: HistoryStore | undefined;
+if (live) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("--live needs GEMINI_API_KEY (get one at https://aistudio.google.com). Using mock data instead.\n");
+  } else {
+    store = new HistoryStore("data/history.json");
+    source = new GeminiSource({ apiKey }, store);
+  }
+}
+console.log(`Source: ${source.name}\n`);
+
+if (store && seedDemo) {
+  // Discover first so there are products to seed, then let scout() re-run discovery for scoring.
+  const found = await source.discover(spec);
+  const n = found.filter((p) => store!.seedSynthetic(p.id, p.currentPrice)).length;
+  console.log(`[demo] Seeded synthetic history for ${n} product(s). Not real price data.\n`);
+}
+
+const items = await scout(spec, source);
+store?.save();
 console.log(renderText(spec, items));
 
 mkdirSync("out", { recursive: true });
