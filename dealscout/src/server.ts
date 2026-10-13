@@ -35,27 +35,36 @@ createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/api/scout") {
       const { query, live } = JSON.parse((await readBody(req)) || "{}");
       if (typeof query !== "string" || !query.trim()) return json(res, 400, { error: "Describe what you want first." });
+      if (live && !hasKey) return json(res, 400, { error: "Live mode needs GEMINI_API_KEY on the server." });
 
-      const { spec, via } = await buildWatchSpec(query.trim());
-      let source: PriceSource = new MockSource();
-      let store: HistoryStore | undefined;
-      if (live) {
-        if (!hasKey) return json(res, 400, { error: "Live mode needs GEMINI_API_KEY on the server." });
-        store = new HistoryStore(join(root, "data/history.json"));
-        source = new GeminiSource({ apiKey: process.env.GEMINI_API_KEY! }, store);
+      // Stream newline-delimited JSON: trace events as the agent works, then the final result.
+      res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-cache" });
+      const send = (o: unknown) => res.write(JSON.stringify(o) + "\n");
+      try {
+        send({ event: "trace", kind: "info", text: "Reading your request…" });
+        const { spec, via } = await buildWatchSpec(query.trim());
+        const must = spec.mustHaves.length ? `, must have ${spec.mustHaves.join(" + ")}` : "";
+        send({ event: "trace", kind: "info", text: `Built a watch spec (${via}): ${spec.category}, budget ₹${spec.budget.toLocaleString("en-IN")}${must}` });
+
+        let source: PriceSource = new MockSource();
+        let store: HistoryStore | undefined;
+        if (live) {
+          store = new HistoryStore(join(root, "data/history.json"));
+          source = new GeminiSource({ apiKey: process.env.GEMINI_API_KEY! }, store);
+        }
+        const items = await scout(spec, source, (e) => send({ event: "trace", ...e }));
+        store?.save();
+        send({
+          event: "result",
+          spec,
+          via,
+          source: source.name,
+          items: items.map((i) => ({ product: i.product, verdict: i.verdict, history: i.history.map((h) => h.price) })),
+        });
+      } catch (err) {
+        send({ event: "error", error: (err as Error).message });
       }
-      const items = await scout(spec, source);
-      store?.save();
-      return json(res, 200, {
-        spec,
-        via,
-        source: source.name,
-        items: items.map((i) => ({
-          product: i.product,
-          verdict: i.verdict,
-          history: i.history.map((h) => h.price),
-        })),
-      });
+      return res.end();
     }
     json(res, 404, { error: "Not found" });
   } catch (err) {

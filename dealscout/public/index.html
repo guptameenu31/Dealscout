@@ -79,6 +79,18 @@
   .empty, .err { text-align: center; color: var(--muted); padding: 36px 8px; }
   .err { color: var(--rose); }
   .note { font-size: 12px; color: var(--muted); margin-top: 20px; text-align: center; }
+  .trace { padding: 18px 22px; }
+  .trace h2 { font: 600 16px var(--serif); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .trace ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  .trace li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; animation: in .25s ease both; }
+  .trace .ic { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; margin-top: 2px; background: var(--grey-bg); color: var(--muted); }
+  .trace .good .ic { background: var(--green-bg); color: var(--green); } .trace .warn .ic { background: var(--rose-bg); color: var(--rose); }
+  .trace .skip { color: var(--muted); } .trace .live .ic { background: var(--accent-soft); color: var(--accent); }
+  .trace .live .ic::after { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: spin .8s linear infinite; }
+  .trace details summary { cursor: pointer; font: 600 15px var(--serif); }
+  @keyframes in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .trace li, .trace .live .ic::after { animation: none; } }
   .skeleton { height: 130px; border-radius: 22px; background: var(--grey-bg); }
 </style>
 </head>
@@ -161,11 +173,11 @@ function card({ product: p, verdict: v, history }) {
   </article>`;
 }
 
-function render(d) {
+function render(d, target) {
   const c = (l) => d.items.filter((i) => i.verdict.label === l).length;
   const fakes = d.items.filter((i) => i.verdict.fakeDiscount).length;
   const must = d.spec.mustHaves.map((m) => `<span class="chip">${esc(m)}</span>`).join("");
-  $("out").innerHTML = `
+  target.innerHTML = `
     <section class="panel"><div class="spec">
       <span class="chip"><b>${esc(d.spec.category)}</b></span><span class="chip">Budget <b>${inr(d.spec.budget)}</b></span>${must}
       <span class="chip" style="margin-left:auto">spec via ${d.via}</span></div></section>
@@ -178,20 +190,72 @@ function render(d) {
   $("note").textContent = d.source === "mock" ? "Showing test data: products and 60-day price history are simulated." : `Source: ${d.source}. Price history builds up daily from today.`;
 }
 
+const ICON = { info: "•", good: "✓", warn: "!", skip: "–" };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 $("go").onclick = async () => {
   const btn = $("go");
   btn.disabled = true; btn.textContent = "Scouting…";
-  $("out").innerHTML = '<div class="cards"><div class="skeleton"></div><div class="skeleton"></div></div>';
+  $("note").textContent = "";
+  $("out").innerHTML = '<section class="panel trace"><h2>DealScout is working</h2><ol id="steps"></ol></section><div id="results"></div>';
+  const steps = $("steps");
+  let result = null, error = null, current = null;
+  const fast = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Show events at a readable pace even when the server answers instantly.
+  const queue = [];
+  let reading = true;
+  const settle = () => { if (current) { current.classList.remove("live"); const ic = current.querySelector(".ic"); ic.textContent = ICON[current.dataset.kind]; } };
+  const pump = (async () => {
+    while (reading || queue.length) {
+      const e = queue.shift();
+      if (!e) { await sleep(40); continue; }
+      settle();
+      const li = document.createElement("li");
+      li.className = e.kind + " live"; li.dataset.kind = e.kind;
+      li.innerHTML = `<span class="ic"></span><span>${esc(e.text)}</span>`;
+      steps.appendChild(li); current = li;
+      await sleep(fast ? 0 : e.kind === "warn" ? 900 : 480);
+    }
+    settle();
+  })();
+
   try {
     const r = await fetch("/api/scout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: $("q").value, live }) });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || "Something went wrong");
-    render(d);
-  } catch (e) {
-    $("out").innerHTML = `<div class="err">${esc(e.message)}</div>`;
-  } finally {
-    btn.disabled = false; btn.textContent = "Scout deals";
+    if (!r.ok) throw new Error((await r.json()).error || "Something went wrong");
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        const m = JSON.parse(line);
+        if (m.event === "trace") queue.push(m);
+        else if (m.event === "result") result = m;
+        else if (m.event === "error") error = m.error;
+      }
+    }
+  } catch (e) { error = e.message; }
+  reading = false;
+  await pump;
+
+  if (error || !result) {
+    $("out").innerHTML = `<div class="err">${esc(error || "No result")}</div>`;
+  } else {
+    const trace = $("out").querySelector(".trace");
+    trace.querySelector("h2").outerHTML = "";
+    const ol = trace.querySelector("ol");
+    const det = document.createElement("details");
+    det.innerHTML = `<summary>How DealScout decided (${ol.children.length} steps)</summary>`;
+    det.appendChild(ol);
+    trace.appendChild(det);
+    render(result, $("results"));
   }
+  btn.disabled = false; btn.textContent = "Scout deals";
 };
 </script>
 </body>

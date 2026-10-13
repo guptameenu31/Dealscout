@@ -1,23 +1,61 @@
 import { judge } from "./verdict.ts";
 import type { PriceSource, ScoredProduct, WatchSpec } from "./types.ts";
 
-/** Does the product's feature list cover every hard requirement? Loose substring match. */
-export function meetsMustHaves(features: string[], mustHaves: string[]): boolean {
-  const hay = features.join(" | ").toLowerCase();
-  return mustHaves.every((m) => hay.includes(m.toLowerCase()));
+export type TraceKind = "info" | "good" | "warn" | "skip";
+export interface TraceEvent {
+  kind: TraceKind;
+  text: string;
 }
 
-/** Discover products, score each against its own price history, best deals first. */
-export async function scout(spec: WatchSpec, source: PriceSource): Promise<ScoredProduct[]> {
-  const products = (await source.discover(spec)).filter((p) => meetsMustHaves(p.features, spec.mustHaves));
-  const scored = await Promise.all(
-    products.map(async (product) => {
-      const history = await source.history(product);
-      return { product, history, verdict: judge(product, history, spec) };
-    }),
-  );
+/** Hard requirements the product's feature list doesn't cover. Loose substring match. */
+export function missingMustHaves(features: string[], mustHaves: string[]): string[] {
+  const hay = features.join(" | ").toLowerCase();
+  return mustHaves.filter((m) => !hay.includes(m.toLowerCase()));
+}
+
+export const meetsMustHaves = (features: string[], mustHaves: string[]) => missingMustHaves(features, mustHaves).length === 0;
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+
+/**
+ * Discover products, score each against its own price history, best deals first.
+ * `onEvent` receives a running trace of what the agent is doing, for the UI.
+ */
+export async function scout(
+  spec: WatchSpec,
+  source: PriceSource,
+  onEvent: (e: TraceEvent) => void = () => {},
+): Promise<ScoredProduct[]> {
+  onEvent({ kind: "info", text: `Searching stores for "${spec.category}" under ${inr(spec.budget)}…` });
+  const found = await source.discover(spec);
+  const stores = [...new Set(found.map((p) => p.store))];
+  onEvent({ kind: "info", text: `Found ${found.length} products across ${stores.length} stores: ${stores.join(", ")}` });
+
+  const products = [];
+  for (const p of found) {
+    const missing = missingMustHaves(p.features, spec.mustHaves);
+    if (missing.length) onEvent({ kind: "skip", text: `Ruled out ${p.name}: missing ${missing.join(", ")}` });
+    else products.push(p);
+  }
+
+  const scored: ScoredProduct[] = [];
+  for (const product of products) {
+    const history = await source.history(product);
+    const verdict = judge(product, history, spec);
+    scored.push({ product, history, verdict });
+    const days = history.length ? `${history.length} days of price history` : "no price history yet";
+    onEvent({ kind: "info", text: `Checked ${product.name}: ${days}` });
+    if (verdict.fakeDiscount) {
+      onEvent({ kind: "warn", text: `Fake discount caught on ${product.name}: ${verdict.claimedDiscountPct}% off claimed, ${Math.max(verdict.realDiscountPct, 0)}% real` });
+    }
+    if (verdict.label === "buy_now") onEvent({ kind: "good", text: `${product.name}: buy now. ${verdict.reasons.at(-1)}` });
+  }
+
   const rank = { buy_now: 0, wait: 1, skip: 2 } as const;
-  return scored.sort(
+  const sorted = scored.sort(
     (a, b) => rank[a.verdict.label] - rank[b.verdict.label] || b.verdict.realDiscountPct - a.verdict.realDiscountPct,
   );
+  const buy = sorted.filter((s) => s.verdict.label === "buy_now").length;
+  onEvent({ kind: "good", text: `Done. ${buy} to buy now, ${sorted.length - buy} to wait on or skip.` });
+  return sorted;
 }
