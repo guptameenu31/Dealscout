@@ -37,10 +37,20 @@ export interface Verdict {
   isLowestSeen: boolean;
 }
 
+/** How well a product fits the stated need, beyond passing the hard requirements. */
+export interface Fit {
+  level: "exact" | "more" | "partial";
+  summary: string;
+  notes: string[];
+  /** Has more than was asked for, so the buyer may be paying for features they won't use. */
+  overkill: boolean;
+}
+
 export interface ScoredProduct {
   product: Product;
   history: PricePoint[];
   verdict: Verdict;
+  fit: Fit;
 }
 
 /** Single plug-in point for retailers: grounded search, official APIs, or fake data. */

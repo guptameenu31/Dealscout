@@ -120,6 +120,19 @@ const fixtures: Fixture[] = [
     history: series("us2x2hr", 13800, 6),
   },
   {
+    // Good price, but 4 inputs when the buyer asked for 2: the need-aware fit check calls this out.
+    product: {
+      id: "umc404hd",
+      name: "Behringer UMC404HD",
+      store: "Flipkart",
+      url: "https://example.com/flipkart/umc404hd",
+      currentPrice: 13999,
+      claimedOriginal: 15999,
+      features: ["4 inputs", "4 outputs", "USB", "48V phantom power", "24-bit/192kHz"],
+    },
+    history: series("umc404hd", 15200, DAYS, (i, n, p) => (i >= n - 3 ? 14400 : p)),
+  },
+  {
     // Cheap and popular, but no phantom power: gets ruled out when the spec requires it.
     product: {
       id: "umc22",

@@ -59,7 +59,7 @@ createServer(async (req, res) => {
           spec,
           via,
           source: source.name,
-          items: items.map((i) => ({ product: i.product, verdict: i.verdict, history: i.history.map((h) => h.price) })),
+          items: items.map((i) => ({ product: i.product, verdict: i.verdict, fit: i.fit, history: i.history.map((h) => h.price) })),
         });
       } catch (err) {
         send({ event: "error", error: (err as Error).message });

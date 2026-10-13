@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { judge } from "../src/verdict.ts";
 import { parseBudget, heuristicSpec } from "../src/spec.ts";
-import { scout } from "../src/scout.ts";
+import { scout, missingMustHaves } from "../src/scout.ts";
 import { MockSource } from "../src/sources/mock.ts";
 import type { PricePoint, Product, WatchSpec } from "../src/types.ts";
 
@@ -69,4 +69,19 @@ test("products missing a must-have are ruled out, with a trace line", async () =
   const items = await scout(heuristicSpec("audio interface with phantom power under 15k"), new MockSource(), (e) => events.push(e.text));
   assert.ok(!items.some((i) => i.product.name === "Behringer UM2"));
   assert.ok(events.some((t) => t.includes("Ruled out Behringer UM2: missing 48V phantom power")));
+});
+
+test("need-aware fit: 4 inputs when 2 asked is flagged, with the price gap to the exact fit", async () => {
+  const items = await scout(heuristicSpec("2-input audio interface with phantom power under 15k"), new MockSource());
+  const big = items.find((i) => i.product.name === "Behringer UMC404HD")!;
+  assert.equal(big.fit.level, "more");
+  assert.equal(big.fit.overkill, true);
+  assert.match(big.fit.notes[0], /Has 4 inputs and you asked for 2\. That is ₹\d[\d,]* more than/);
+  const exact = items.find((i) => i.product.name === "Behringer UMC204HD")!;
+  assert.equal(exact.fit.level, "exact");
+});
+
+test("input requirements mean at least N", () => {
+  assert.equal(missingMustHaves(["4 inputs"], ["2 inputs"]).length, 0);
+  assert.equal(missingMustHaves(["1 input"], ["2 inputs"]).length, 1);
 });

@@ -1,3 +1,4 @@
+import { assessFit, satisfies } from "./fit.ts";
 import { judge } from "./verdict.ts";
 import type { PriceSource, ScoredProduct, WatchSpec } from "./types.ts";
 
@@ -7,10 +8,9 @@ export interface TraceEvent {
   text: string;
 }
 
-/** Hard requirements the product's feature list doesn't cover. Loose substring match. */
+/** Hard requirements the product's feature list doesn't cover. Input counts mean "at least N". */
 export function missingMustHaves(features: string[], mustHaves: string[]): string[] {
-  const hay = features.join(" | ").toLowerCase();
-  return mustHaves.filter((m) => !hay.includes(m.toLowerCase()));
+  return mustHaves.filter((m) => !satisfies(features, m));
 }
 
 export const meetsMustHaves = (features: string[], mustHaves: string[]) => missingMustHaves(features, mustHaves).length === 0;
@@ -42,12 +42,14 @@ export async function scout(
   for (const product of products) {
     const history = await source.history(product);
     const verdict = judge(product, history, spec);
-    scored.push({ product, history, verdict });
+    const fit = assessFit(product, spec, products);
+    scored.push({ product, history, verdict, fit });
     const days = history.length ? `${history.length} days of price history` : "no price history yet";
     onEvent({ kind: "info", text: `Checked ${product.name}: ${days}` });
     if (verdict.fakeDiscount) {
       onEvent({ kind: "warn", text: `Fake discount caught on ${product.name}: ${verdict.claimedDiscountPct}% off claimed, ${Math.max(verdict.realDiscountPct, 0)}% real` });
     }
+    if (fit.overkill) onEvent({ kind: "warn", text: `${product.name}: more than you need. ${fit.notes[0]}` });
     if (verdict.label === "buy_now") onEvent({ kind: "good", text: `${product.name}: buy now. ${verdict.reasons.at(-1)}` });
   }
 
