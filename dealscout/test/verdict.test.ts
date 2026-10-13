@@ -63,3 +63,10 @@ test("scout ranks buy_now first and covers every scenario", async () => {
   assert.equal(items.at(-1)!.verdict.label, "skip");
   assert.ok(items.some((i) => i.verdict.fakeDiscount));
 });
+
+test("products missing a must-have are ruled out, with a trace line", async () => {
+  const events: string[] = [];
+  const items = await scout(heuristicSpec("audio interface with phantom power under 15k"), new MockSource(), (e) => events.push(e.text));
+  assert.ok(!items.some((i) => i.product.name === "Behringer UM2"));
+  assert.ok(events.some((t) => t.includes("Ruled out Behringer UM2: missing 48V phantom power")));
+});

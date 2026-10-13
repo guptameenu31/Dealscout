@@ -120,6 +120,19 @@ const fixtures: Fixture[] = [
     history: series("us2x2hr", 13800, 6),
   },
   {
+    // Cheap and popular, but no phantom power: gets ruled out when the spec requires it.
+    product: {
+      id: "umc22",
+      name: "Behringer UM2",
+      store: "Amazon.in",
+      url: "https://example.com/amazon/um2",
+      currentPrice: 3999,
+      claimedOriginal: 4999,
+      features: ["2 inputs", "USB", "24-bit/48kHz"],
+    },
+    history: series("umc22", 4100, DAYS),
+  },
+  {
     // Unremarkable: sitting at its usual price.
     product: {
       id: "minifuse-2",
