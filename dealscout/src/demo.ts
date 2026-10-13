@@ -43,7 +43,15 @@ if (store && seedDemo) {
   console.log(`[demo] Seeded synthetic history for ${n} product(s). Not real price data.\n`);
 }
 
-const items = await scout(spec, source);
+let items;
+try {
+  items = await scout(spec, source);
+} catch (err) {
+  // Same idea as the server's fallback chain: never crash the demo, say what happened.
+  const msg = String((err as Error)?.message ?? err).slice(0, 200);
+  console.error(`Live search failed: ${msg}\nFalling back to seeded demo data (synthetic, not real prices).\n`);
+  items = await scout(spec, new MockSource());
+}
 store?.save();
 console.log(renderText(spec, items));
 
