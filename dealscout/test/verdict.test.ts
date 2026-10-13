@@ -85,3 +85,10 @@ test("input requirements mean at least N", () => {
   assert.equal(missingMustHaves(["4 inputs"], ["2 inputs"]).length, 0);
   assert.equal(missingMustHaves(["1 input"], ["2 inputs"]).length, 1);
 });
+
+test("budget parsing prefers the number after 'under', not '49 keys'", () => {
+  assert.equal(parseBudget("MIDI keyboard 49 keys under ₹10k"), 10000);
+  assert.equal(parseBudget("digital piano with weighted keys under ₹40,000"), 40000);
+  assert.equal(parseBudget("podcast kit, budget of 30k"), 30000);
+  assert.equal(parseBudget("USB audio interface, 2 inputs"), undefined);
+});

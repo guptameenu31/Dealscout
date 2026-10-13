@@ -2,16 +2,15 @@ import type { WatchSpec } from "./types.ts";
 
 /** Pull a rupee budget out of text like "under ₹15k", "Rs 15,000", "below 15000". */
 export function parseBudget(text: string): number | undefined {
-  const m = text.match(/(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)\s*(k|l|lakh)?/gi);
-  if (!m) return undefined;
-  const candidates = m
-    .map((raw) => {
-      const mm = raw.match(/(\d[\d,]*(?:\.\d+)?)\s*(k|l|lakh)?/i)!;
-      const n = parseFloat(mm[1].replace(/,/g, ""));
-      const unit = (mm[2] ?? "").toLowerCase();
-      return unit === "k" ? n * 1_000 : unit === "l" || unit === "lakh" ? n * 100_000 : n;
-    })
-    .filter((n) => n >= 500);
+  const amount = (num: string, unit?: string) => {
+    const n = parseFloat(num.replace(/,/g, ""));
+    const u = (unit ?? "").toLowerCase();
+    return u === "k" ? n * 1_000 : u === "l" || u === "lakh" ? n * 100_000 : n;
+  };
+  // A number introduced by "under / below / budget ..." or a rupee sign is the budget, not "49 keys".
+  const cue = text.match(/(?:under|below|within|upto|up to|budget(?: of)?|max(?:imum)?|₹|rs\.?|inr)\s*(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)\s*(k|l|lakh)?\b/i);
+  if (cue) return amount(cue[1], cue[2]);
+  const candidates = [...text.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(k|l|lakh)?\b/gi)].map((m) => amount(m[1], m[2])).filter((n) => n >= 500);
   return candidates.length ? Math.max(...candidates) : undefined;
 }
 
