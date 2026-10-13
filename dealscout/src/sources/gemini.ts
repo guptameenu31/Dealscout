@@ -107,6 +107,7 @@ User request: ${spec.query}`,
   normalize(raw: any[]): Product[] {
     const seen = new Set<string>();
     const out: Product[] = [];
+    const observedAt = new Date().toISOString();
     for (const r of Array.isArray(raw) ? raw : []) {
       const price = Number(r?.currentPrice);
       if (!r?.name || !r?.store || !/^https?:\/\//.test(r?.url ?? "") || !(price > 0)) continue;
@@ -122,6 +123,7 @@ User request: ${spec.query}`,
         currentPrice: price,
         claimedOriginal: mrp > price ? mrp : undefined,
         features: Array.isArray(r.features) ? r.features.map(String) : [],
+        observedAt,
       });
       this.store.record(id, price);
     }

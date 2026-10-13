@@ -28,7 +28,7 @@ function series(id: string, base: number, days: number, shape?: (i: number, n: n
   const r = rng(id);
   return Array.from({ length: days }, (_, i) => {
     const p = base * (1 + (r() - 0.5) * 0.06);
-    return { date: dateAgo(days - i), price: round99(shape ? shape(i, days, p) : p) };
+    return { date: dateAgo(days - i), price: round99(shape ? shape(i, days, p) : p), provenance: "seeded" as const };
   });
 }
 
@@ -139,7 +139,8 @@ export class MockSource implements PriceSource {
   name = "mock";
 
   async discover(_spec: WatchSpec): Promise<Product[]> {
-    return fixtures.map((f) => f.product);
+    const observedAt = new Date().toISOString();
+    return fixtures.map((f) => ({ ...f.product, observedAt }));
   }
 
   async history(product: Product): Promise<PricePoint[]> {

@@ -1,0 +1,9 @@
+node_modules
+web/node_modules
+web/dist
+data
+out
+.env
+.env.*
+!.env.example
+*.log

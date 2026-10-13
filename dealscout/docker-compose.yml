@@ -1,0 +1,16 @@
+# Local run of the same container Cloud Run uses:  docker compose up --build
+# Then open http://localhost:8080
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data # price history + result cache survive restarts locally
+
+  # Next step (database): a Firestore emulator service goes here.

@@ -6,7 +6,10 @@ import { scout } from "../src/scout.ts";
 import { MockSource } from "../src/sources/mock.ts";
 import type { PricePoint, Product, WatchSpec } from "../src/types.ts";
 
-const spec: WatchSpec = { query: "", category: "x", budget: 15000, mustHaves: [], niceToHaves: [], searchTerms: [] };
+const spec: WatchSpec = {
+  query: "", category: "x", budget: 15000, currency: "INR", mustHaves: [], niceToHaves: [], excluded: [], searchTerms: [],
+  needsClarification: false, clarificationQuestion: null,
+};
 const hist = (prices: number[]): PricePoint[] => prices.map((price, i) => ({ date: `d${i}`, price }));
 const prod = (currentPrice: number, claimedOriginal?: number): Product => ({
   id: "p", name: "P", store: "S", url: "u", currentPrice, claimedOriginal, features: [],
