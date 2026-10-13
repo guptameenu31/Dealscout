@@ -26,6 +26,22 @@ export async function scout(
   source: PriceSource,
   onEvent: (e: TraceEvent) => void = () => {},
 ): Promise<ScoredProduct[]> {
+  return (await scoutDetailed(spec, source, onEvent)).items;
+}
+
+export interface FilteredOut {
+  name: string;
+  store: string;
+  reason: string;
+}
+
+/** Like scout(), but also reports the products that were found and ruled out, with reasons. */
+export async function scoutDetailed(
+  spec: WatchSpec,
+  source: PriceSource,
+  onEvent: (e: TraceEvent) => void = () => {},
+): Promise<{ items: ScoredProduct[]; filteredOut: FilteredOut[] }> {
+  const filteredOut: FilteredOut[] = [];
   onEvent({ kind: "info", text: `Searching stores for "${spec.category}" under ${inr(spec.budget)}…` });
   const found = await source.discover(spec);
   const stores = [...new Set(found.map((p) => p.store))];
@@ -34,8 +50,15 @@ export async function scout(
   const products = [];
   for (const p of found) {
     const missing = missingMustHaves(p.features, spec.mustHaves);
-    if (missing.length) onEvent({ kind: "skip", text: `Ruled out ${p.name}: missing ${missing.join(", ")}` });
-    else products.push(p);
+    const hay = p.features.join(" | ").toLowerCase();
+    const unwanted = (spec.excluded ?? []).filter((x) => x && hay.includes(x.toLowerCase()));
+    if (missing.length) {
+      onEvent({ kind: "skip", text: `Ruled out ${p.name}: missing ${missing.join(", ")}` });
+      filteredOut.push({ name: p.name, store: p.store, reason: `Missing: ${missing.join(", ")}` });
+    } else if (unwanted.length) {
+      onEvent({ kind: "skip", text: `Ruled out ${p.name}: has ${unwanted.join(", ")}, which you excluded` });
+      filteredOut.push({ name: p.name, store: p.store, reason: `Has excluded feature: ${unwanted.join(", ")}` });
+    } else products.push(p);
   }
 
   const scored: ScoredProduct[] = [];
@@ -59,5 +82,5 @@ export async function scout(
   );
   const buy = sorted.filter((s) => s.verdict.label === "buy_now").length;
   onEvent({ kind: "good", text: `Done. ${buy} to buy now, ${sorted.length - buy} to wait on or skip.` });
-  return sorted;
+  return { items: sorted, filteredOut };
 }

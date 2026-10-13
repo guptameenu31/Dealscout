@@ -5,11 +5,18 @@ export interface WatchSpec {
   mustHaves: string[];
   niceToHaves: string[];
   searchTerms: string[];
+  currency?: "INR";
+  /** Features the user does NOT want. */
+  excluded?: string[];
+  needsClarification?: boolean;
+  clarificationQuestion?: string | null;
 }
 
 export interface PricePoint {
   date: string; // YYYY-MM-DD
   price: number;
+  /** "seeded" = synthetic demo data; absent or "live" = observed. */
+  provenance?: "live" | "seeded";
 }
 
 export interface Product {

@@ -28,7 +28,7 @@ function series(id: string, base: number, days: number, shape?: (i: number, n: n
   const r = rng(id);
   return Array.from({ length: days }, (_, i) => {
     const p = base * (1 + (r() - 0.5) * 0.06);
-    return { date: dateAgo(days - i), price: round99(shape ? shape(i, days, p) : p) };
+    return { date: dateAgo(days - i), price: round99(shape ? shape(i, days, p) : p), provenance: "seeded" as const };
   });
 }
 
@@ -192,6 +192,17 @@ fixtures.push(
   item("boom arm", "samson-mba38", "Samson MBA38", "Amazon.in", 2499, 3099, ["boom arm", "desk clamp"], 2800, lowToday(2499)),
   item("boom arm", "tonor-boom", "Tonor Boom Arm", "Flipkart", 1299, 1499, ["boom arm", "desk clamp"], 1300),
   item("boom arm", "rode-psa1", "Rode PSA1", "Amazon.in", 7499, 8999, ["boom arm", "desk clamp"], 7700),
+);
+
+fixtures.push(
+  // Digital pianos
+  item("digital piano", "yamaha-p45", "Yamaha P-45", "Amazon.in", 36990, 44990, ["88 keys", "weighted keys", "GHS action"], 40500, lowToday(36990)),
+  item("digital piano", "casio-cdp-s110", "Casio CDP-S110", "Flipkart", 31990, 52990, ["88 keys", "weighted keys", "scaled hammer action"], 32000),
+  item("digital piano", "kawai-es120", "Kawai ES120", "Sweetwater India", 62990, 69990, ["88 keys", "weighted keys", "Responsive Hammer"], 64000),
+  // MIDI keyboards
+  item("midi keyboard", "akai-mpk-mini", "Akai MPK Mini MK3", "Amazon.in", 9499, 12999, ["25 keys", "pads", "USB"], 11500, lowToday(9499)),
+  item("midi keyboard", "m-audio-keystation-49", "M-Audio Keystation 49 MK3", "Flipkart", 8999, 11999, ["49 keys", "USB"], 9000),
+  item("midi keyboard", "nektar-impact-lx49", "Nektar Impact LX49+", "Musicians Hub", 11499, 13999, ["49 keys", "pads", "USB"], 11600),
 );
 
 /** Offline stand-in for real retailers. Swap for a grounded-search or retailer-API source. */
