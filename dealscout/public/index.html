@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DealScout</title>
+<style>
+  :root {
+    --bg: #f6f8f7; --surface: #ffffff; --ink: #14201c; --muted: #5b6760; --line: #dfe7e3;
+    --green: #0f7b4f; --green-bg: #e6f3ec; --amber: #b36f00; --amber-bg: #fdf1d8;
+    --red: #b3261e; --red-bg: #fbe7e5; --grey-bg: #eef1ef; --accent: #0f7b4f; --on-accent: #ffffff;
+    --serif: Cambria, Georgia, "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1613; --surface: #17201c; --ink: #e8efeb; --muted: #94a39b; --line: #2a362f;
+      --green: #4fc48a; --green-bg: #15301f; --amber: #f0b43c; --amber-bg: #33270d;
+      --red: #ff7a70; --red-bg: #3a1815; --grey-bg: #1f2a25; --accent: #4fc48a; --on-accent: #0f1613; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font: 700 30px/1.1 var(--serif); margin: 0; }
+  .tag { color: var(--muted); }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 20px; }
+  label { font-weight: 600; display: block; margin-bottom: 6px; }
+  textarea { width: 100%; min-height: 76px; resize: vertical; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); font: inherit; }
+  textarea:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .examples { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .ex { background: var(--grey-bg); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+  button.go { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 10px; padding: 10px 20px; font-weight: 700; font-size: 15px; cursor: pointer; }
+  button.go:disabled { opacity: .6; cursor: wait; }
+  .spacer { flex: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { background: var(--surface); color: var(--ink); border: 0; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .seg button:disabled { opacity: .45; cursor: not-allowed; }
+  .spec { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip { background: var(--grey-bg); border-radius: 999px; padding: 3px 12px; font-size: 13px; }
+  .chip b { font-weight: 700; }
+  .sum { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+  .stat { flex: 1 1 150px; border-radius: 12px; padding: 12px 14px; }
+  .stat .n { font: 700 28px/1 var(--serif); }
+  .stat.g { background: var(--green-bg); color: var(--green); } .stat.a { background: var(--amber-bg); color: var(--amber); }
+  .stat.r { background: var(--red-bg); color: var(--red); }
+  .cards { display: grid; gap: 12px; margin-top: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 8px 20px; }
+  @media (max-width: 640px) { .card { grid-template-columns: minmax(0, 1fr); } }
+  .top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .badge { font-size: 11px; font-weight: 800; letter-spacing: .08em; border-radius: 6px; padding: 3px 8px; }
+  .b-buy_now { background: var(--green-bg); color: var(--green); } .b-wait { background: var(--amber-bg); color: var(--amber); }
+  .b-skip { background: var(--grey-bg); color: var(--muted); }
+  .fake { background: var(--red-bg); color: var(--red); }
+  .name { font-weight: 700; font-size: 16px; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .price { font: 700 22px/1.2 var(--serif); margin-top: 6px; }
+  .price s { color: var(--muted); font: 400 14px system-ui; margin-left: 6px; }
+  ul.why { margin: 8px 0 0; padding-left: 18px; color: var(--ink); font-size: 14px; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart .cap { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .conf { font-size: 12px; color: var(--muted); }
+  .empty, .err { text-align: center; color: var(--muted); padding: 28px 8px; }
+  .err { color: var(--red); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 18px; }
+  .skeleton { height: 120px; border-radius: 14px; background: var(--grey-bg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>DealScout</h1>
+    <div class="tag">Watches the need, not the product.</div>
+  </header>
+
+  <section class="panel">
+    <label for="q">What do you want, and what can you spend?</label>
+    <textarea id="q">I need a 2-input USB audio interface with phantom power for home recording, under ₹15k</textarea>
+    <div class="examples" id="examples"></div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="Data source">
+        <button id="m-test" aria-pressed="true">Test data</button>
+        <button id="m-live" aria-pressed="false" disabled title="Needs GEMINI_API_KEY on the server">Live (Gemini)</button>
+      </div>
+      <span class="spacer"></span>
+      <button class="go" id="go">Scout deals</button>
+    </div>
+  </section>
+
+  <div id="out"><div class="empty">Describe a need above and DealScout will find matches and judge each price.</div></div>
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const inr = (n) => "₹" + Math.round(n).toLocaleString("en-IN");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const LABEL = { buy_now: "BUY NOW", wait: "WAIT", skip: "OVER BUDGET" };
+let live = false;
+
+const EXAMPLES = [
+  "2-input USB audio interface with phantom power, under ₹15k",
+  "audio interface for podcasting under ₹10,000",
+];
+$("examples").innerHTML = EXAMPLES.map((e) => `<button class="ex" type="button">${esc(e)}</button>`).join("");
+$("examples").addEventListener("click", (e) => { if (e.target.classList.contains("ex")) $("q").value = e.target.textContent; });
+
+function setMode(l) {
+  live = l;
+  $("m-test").setAttribute("aria-pressed", String(!l));
+  $("m-live").setAttribute("aria-pressed", String(l));
+}
+$("m-test").onclick = () => setMode(false);
+$("m-live").onclick = () => setMode(true);
+fetch("/api/config").then((r) => r.json()).then((c) => { if (c.liveAvailable) $("m-live").disabled = false; }).catch(() => {});
+
+function chart(history, current, claimed) {
+  const W = 240, H = 84, padX = 4, padY = 8;
+  const all = [...history, current, ...(claimed ? [claimed] : [])];
+  const lo = Math.min(...all) * 0.96, hi = Math.max(...all) * 1.04;
+  const n = history.length;
+  const x = (i) => padX + (i / Math.max(n, 1)) * (W - 2 * padX);
+  const y = (v) => padY + (1 - (v - lo) / (hi - lo)) * (H - 2 * padY);
+  const pts = history.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const cur = `<circle cx="${x(n).toFixed(1)}" cy="${y(current).toFixed(1)}" r="4" fill="var(--accent)"/>`;
+  const claim = claimed
+    ? `<line x1="${padX}" x2="${W - padX}" y1="${y(claimed)}" y2="${y(claimed)}" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="4 3"/>`
+    : "";
+  const line = n ? `<polyline points="${pts} ${x(n).toFixed(1)},${y(current).toFixed(1)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>` : "";
+  const cap = n ? `${n}-day price${claimed ? ` · <span style="color:var(--red)">- - store's "original"</span>` : ""}` : "No price history yet";
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history">${claim}${line}${cur}</svg><div class="cap">${cap}</div></div>`;
+}
+
+function card({ product: p, verdict: v, history }) {
+  return `<article class="card">
+    <div>
+      <div class="top"><span class="badge b-${v.label}">${LABEL[v.label]}</span>${v.fakeDiscount ? '<span class="badge fake">FAKE DISCOUNT</span>' : ""}
+        <span class="conf">${v.confidence} confidence</span></div>
+      <div style="margin-top:8px"><a class="name" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a></div>
+      <div class="meta">${esc(p.store)}</div>
+      <div class="price">${inr(p.currentPrice)}${p.claimedOriginal ? `<s>${inr(p.claimedOriginal)}</s>` : ""}</div>
+      <ul class="why">${v.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
+    </div>
+    ${chart(history, p.currentPrice, p.claimedOriginal)}
+  </article>`;
+}
+
+function render(d) {
+  const c = (l) => d.items.filter((i) => i.verdict.label === l).length;
+  const fakes = d.items.filter((i) => i.verdict.fakeDiscount).length;
+  const must = d.spec.mustHaves.map((m) => `<span class="chip">${esc(m)}</span>`).join("");
+  $("out").innerHTML = `
+    <section class="panel"><div class="spec">
+      <span class="chip"><b>${esc(d.spec.category)}</b></span><span class="chip">Budget <b>${inr(d.spec.budget)}</b></span>${must}
+      <span class="chip" style="margin-left:auto">spec via ${d.via}</span></div></section>
+    <div class="sum">
+      <div class="stat g"><div class="n">${c("buy_now")}</div>Buy now</div>
+      <div class="stat a"><div class="n">${c("wait")}</div>Wait</div>
+      <div class="stat r"><div class="n">${fakes}</div>Fake discounts caught</div>
+    </div>
+    <div class="cards">${d.items.map(card).join("") || '<div class="empty">No matches found.</div>'}</div>`;
+  $("note").textContent = d.source === "mock" ? "Showing test data: products and 60-day price history are simulated." : `Source: ${d.source}. Price history builds up daily from today.`;
+}
+
+$("go").onclick = async () => {
+  const btn = $("go");
+  btn.disabled = true; btn.textContent = "Scouting…";
+  $("out").innerHTML = '<div class="cards"><div class="skeleton"></div><div class="skeleton"></div></div>';
+  try {
+    const r = await fetch("/api/scout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: $("q").value, live }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Something went wrong");
+    render(d);
+  } catch (e) {
+    $("out").innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Scout deals";
+  }
+};
+</script>
+</body>
+</html>

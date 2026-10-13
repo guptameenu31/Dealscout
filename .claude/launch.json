@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "dealscout-ui", "runtimeExecutable": "node", "runtimeArgs": ["dealscout/src/server.ts"], "port": 3000 }
+  ]
+}

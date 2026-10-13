@@ -65,7 +65,7 @@ export function judge(product: Product, history: PricePoint[], spec: WatchSpec):
   const nearLow = cur <= min * NEAR_LOW;
 
   // The "was" price is fake if the product never actually sold anywhere near it.
-  const fakeDiscount = !!claimed && claimedDiscountPct >= 10 && max < claimed * (1 - CLAIM_TOLERANCE);
+  const fakeDiscount = !!claimed && claimedDiscountPct >= 20 && max < claimed * (1 - CLAIM_TOLERANCE);
 
   const recent = prices.slice(-7);
   const earlier = prices.slice(-21, -7);
