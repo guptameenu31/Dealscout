@@ -1,0 +1,6 @@
+node_modules/
+.env
+.env.*
+*.key
+.DS_Store
+dealscout/out/
