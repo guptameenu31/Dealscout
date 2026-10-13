@@ -22,7 +22,8 @@ export function renderText(spec: WatchSpec, items: ScoredProduct[]): string {
   return lines.join("\n");
 }
 
-export function renderHtml(spec: WatchSpec, items: ScoredProduct[]): string {
+/** `note` (optional) is shown under the title, e.g. to disclose that the data is synthetic demo data. */
+export function renderHtml(spec: WatchSpec, items: ScoredProduct[], note?: string): string {
   const badge = { buy_now: ["#0a7d3c", "BUY NOW"], wait: ["#b26a00", "WAIT"], skip: ["#6b6b6b", "OVER BUDGET"] } as const;
   const card = ({ product: p, verdict: v }: ScoredProduct) => {
     const [color, text] = badge[v.label];
@@ -44,6 +45,7 @@ export function renderHtml(spec: WatchSpec, items: ScoredProduct[]): string {
   return `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,sans-serif;max-width:560px;margin:24px auto;padding:0 16px;color:#111">
 <h2 style="margin-bottom:2px">DealScout digest</h2>
 <div style="color:#666;font-size:14px">${esc(spec.category)} under ${inr(spec.budget)}</div>
+${note ? `<div style="margin-top:10px;padding:8px 10px;border-radius:8px;background:#f3f0ff;color:#4c1d95;font-size:13px">${esc(note)}</div>` : ""}
 ${sec("Buy now", "buy_now")}${sec("Wait", "wait")}${sec("Over budget", "skip")}
 </body></html>`;
 }

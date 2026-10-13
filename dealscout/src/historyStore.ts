@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { PricePoint } from "./types.ts";
+import type { PointProvenance, PricePoint } from "./types.ts";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -15,9 +15,9 @@ export class HistoryStore {
   }
 
   /** Record today's price (replaces an earlier snapshot from the same day). */
-  record(id: string, price: number, date = today()): void {
+  record(id: string, price: number, date = today(), provenance: PointProvenance = "live"): void {
     const list = (this.data[id] ??= []).filter((p) => p.date !== date);
-    list.push({ date, price });
+    list.push({ date, price, provenance });
     this.data[id] = list.sort((a, b) => a.date.localeCompare(b.date));
   }
 
@@ -37,7 +37,7 @@ export class HistoryStore {
     for (let i = days; i >= 1; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      this.record(id, Math.round(currentPrice * (1.03 + (rand() - 0.5) * 0.06)), d.toISOString().slice(0, 10));
+      this.record(id, Math.round(currentPrice * (1.03 + (rand() - 0.5) * 0.06)), d.toISOString().slice(0, 10), "seeded");
     }
     return true;
   }

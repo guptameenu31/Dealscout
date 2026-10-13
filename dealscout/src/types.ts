@@ -2,14 +2,24 @@ export interface WatchSpec {
   query: string;
   category: string;
   budget: number; // INR
+  currency: "INR";
   mustHaves: string[];
   niceToHaves: string[];
+  /** Features the user explicitly does not want. */
+  excluded: string[];
   searchTerms: string[];
+  needsClarification: boolean;
+  clarificationQuestion: string | null;
 }
+
+/** live = really observed; seeded = synthetic demo data (must always be disclosed). */
+export type PointProvenance = "live" | "seeded";
 
 export interface PricePoint {
   date: string; // YYYY-MM-DD
   price: number;
+  /** Missing on legacy records; treat as "live". */
+  provenance?: PointProvenance;
 }
 
 export interface Product {
@@ -21,6 +31,8 @@ export interface Product {
   /** The "was" / MRP price the store advertises, if any. */
   claimedOriginal?: number;
   features: string[];
+  /** When currentPrice was observed (ISO). */
+  observedAt?: string;
 }
 
 export type VerdictLabel = "buy_now" | "wait" | "skip";
