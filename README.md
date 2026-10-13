@@ -7,17 +7,21 @@ AI shopping scout that watches a *need*, not a product, and flags fake discounts
 - `dealscout/`: working prototype (TypeScript, no dependencies)
 
 ## Run it
-Needs Node 22.18 or newer (check with `node -v`).
+Needs Node 22.18 or newer (check with `node -v`; `.nvmrc` pins 22).
 
 ```bash
 cd dealscout
-npm run demo     # prints the watch spec + digest, writes out/digest.html
-npm test         # 9 tests
+npm install          # dev tooling only (TypeScript, Node types); no runtime dependencies
+cp .env.example .env # then add your GEMINI_API_KEY (optional)
+npm run demo         # prints the watch spec + digest, writes out/digest.html
+npm run check        # type-check + all tests
 ```
+
+Other scripts: `npm test` (tests only), `npm run typecheck` (types only).
 
 Open `dealscout/out/digest.html` in a browser to see the email-style digest.
 
-Optional: `export GEMINI_API_KEY=...` makes the watch spec come from Gemini instead of the offline fallback. Never commit the key.
+Optional: set `GEMINI_API_KEY` in `dealscout/.env` to make the watch spec come from Gemini instead of the offline fallback. `.env` is git-ignored; never commit the key.
 
 ## What's real vs. fake
 - Real: the verdict logic (`src/verdict.ts`), watch-spec parsing, digest rendering.

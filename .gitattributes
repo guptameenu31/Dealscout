@@ -1,0 +1,5 @@
+# Store text files with LF in git on every OS (prevents CRLF-only diffs on Windows).
+* text=auto eol=lf
+*.pptx binary
+*.png binary
+*.jpg binary
