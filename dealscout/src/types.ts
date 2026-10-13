@@ -33,6 +33,17 @@ export interface Product {
   features: string[];
   /** When currentPrice was observed (ISO). */
   observedAt?: string;
+  /** Live discovery only: Gemini's per-requirement check, with evidence quoted from the search results. */
+  mustHaveChecks?: RequirementCheck[];
+  /** Live discovery only: does the product URL's site appear among Google Search's grounding sources? */
+  linkInSources?: boolean;
+}
+
+export interface RequirementCheck {
+  requirement: string;
+  met: "yes" | "no" | "unknown";
+  /** Short quote or paraphrase from the search results supporting the answer. */
+  evidence: string;
 }
 
 export type VerdictLabel = "buy_now" | "wait" | "skip";

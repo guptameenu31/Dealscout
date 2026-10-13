@@ -12,6 +12,28 @@ export function missingMustHaves(features: string[], mustHaves: string[]): strin
   return mustHaves.filter((m) => !hay.includes(m.toLowerCase()));
 }
 
+/**
+ * Decide must-haves for one product. Gemini's per-requirement check (live discovery) wins when present:
+ * "no" drops the product, "unknown" keeps it but flags it as unconfirmed. Without a check we fall back to
+ * the substring rule. The decision itself is plain code; the AI only supplies evidence.
+ */
+export function evaluateMustHaves(product: Product, mustHaves: string[]): { missing: string[]; unconfirmed: string[] } {
+  const missing: string[] = [];
+  const unconfirmed: string[] = [];
+  for (const m of mustHaves) {
+    const textMatch = missingMustHaves(product.features, [m]).length === 0;
+    const check = product.mustHaveChecks?.find((c) => c.requirement.toLowerCase() === m.toLowerCase());
+    if (!check) {
+      if (!textMatch) (product.mustHaveChecks ? unconfirmed : missing).push(m);
+    } else if (check.met === "no") {
+      missing.push(m);
+    } else if (check.met === "unknown" && !textMatch) {
+      unconfirmed.push(m);
+    }
+  }
+  return { missing, unconfirmed };
+}
+
 /** Excluded features the product has. */
 export function excludedHits(features: string[], excluded: string[]): string[] {
   const hay = features.join(" | ").toLowerCase();
@@ -35,7 +57,7 @@ export async function scoutDetailed(spec: WatchSpec, source: PriceSource): Promi
   const kept: Product[] = [];
   const filteredOut: FilteredOut[] = [];
   for (const p of discovered) {
-    const missing = missingMustHaves(p.features, spec.mustHaves);
+    const { missing } = evaluateMustHaves(p, spec.mustHaves);
     const banned = excludedHits(p.features, spec.excluded ?? []);
     if (missing.length) filteredOut.push({ product: p, reason: `Missing: ${missing.join(", ")}` });
     else if (banned.length) filteredOut.push({ product: p, reason: `Has excluded feature: ${banned.join(", ")}` });

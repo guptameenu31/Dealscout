@@ -7,8 +7,13 @@ const app = createApp({ config });
 const server = app.listen(config.PORT, (err?: Error) => {
   if (err) throw err;
   console.log(
-    `DealScout API listening on http://localhost:${config.PORT} ` +
-      `(live search: ${config.GEMINI_API_KEY ? `on, ${config.GEMINI_MODEL}` : "off - no GEMINI_API_KEY"})`,
+    `DealScout API listening on http://localhost:${config.PORT} (AI: ${
+      config.GOOGLE_GENAI_USE_VERTEXAI
+        ? `Vertex AI, ${config.GEMINI_MODEL}`
+        : config.GEMINI_API_KEY
+          ? `Gemini API key, ${config.GEMINI_MODEL}`
+          : "off - set GEMINI_API_KEY or GOOGLE_GENAI_USE_VERTEXAI"
+    })`,
   );
 });
 
