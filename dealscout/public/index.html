@@ -95,6 +95,20 @@
   @keyframes in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .trace li, .trace .live .ic::after { animation: none; } }
+  .kit-head { margin-top: 22px; }
+  .bar { display: flex; height: 18px; border-radius: 999px; overflow: hidden; background: var(--grey-bg); margin: 14px 0 10px; gap: 2px; }
+  .bar span { display: block; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .kit-total { font: 600 26px/1.2 var(--serif); }
+  .kit-total small { font: 400 14px var(--sans); color: var(--muted); }
+  .upgrade { margin-top: 14px; background: var(--accent-soft); color: var(--ink); border-radius: 16px; padding: 12px 16px; }
+  .upgrade b { color: var(--accent); }
+  .kit-item { margin-top: 26px; }
+  .kit-item h3 { font: 600 20px var(--serif); margin: 0 0 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .kit-item details { margin-top: 10px; }
+  .kit-item details > summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 4px 2px; }
+  .kit-item details .cards { margin-top: 8px; }
   .skeleton { height: 130px; border-radius: 22px; background: var(--grey-bg); }
 </style>
 </head>
@@ -110,6 +124,10 @@
     <textarea id="q">I need a 2-input USB audio interface with phantom power for home recording, under ₹15k</textarea>
     <div class="examples" id="examples"></div>
     <div class="row">
+      <div class="seg" role="group" aria-label="What to plan">
+        <button id="k-one" aria-pressed="true">One product</button>
+        <button id="k-kit" aria-pressed="false">Plan a kit</button>
+      </div>
       <div class="seg" role="group" aria-label="Data source">
         <button id="m-test" aria-pressed="true">Test data</button>
         <button id="m-live" aria-pressed="false" disabled title="Needs GEMINI_API_KEY on the server">Live (Gemini)</button>
@@ -130,11 +148,25 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const LABEL = { buy_now: "BUY NOW", wait: "WAIT", skip: "OVER BUDGET" };
 let live = false;
 
-const EXAMPLES = [
-  "2-input USB audio interface with phantom power, under ₹15k",
-  "audio interface for podcasting under ₹10,000",
-];
-$("examples").innerHTML = EXAMPLES.map((e) => `<button class="ex" type="button">${esc(e)}</button>`).join("");
+const EXAMPLES = {
+  one: ["2-input USB audio interface with phantom power, under ₹15k", "audio interface for podcasting under ₹10,000"],
+  kit: ["I'm starting a podcast and have ₹30,000 total", "Set me up for a podcast, ₹25,000 all in"],
+};
+const DEFAULT_Q = { one: "I need a 2-input USB audio interface with phantom power for home recording, under ₹15k", kit: "I'm starting a podcast and have ₹30,000 total" };
+let kit = false;
+function setKind(k) {
+  kit = k;
+  $("k-one").setAttribute("aria-pressed", String(!k));
+  $("k-kit").setAttribute("aria-pressed", String(k));
+  const key = k ? "kit" : "one";
+  $("q").value = DEFAULT_Q[key];
+  $("examples").innerHTML = EXAMPLES[key].map((e) => `<button class="ex" type="button">${esc(e)}</button>`).join("");
+  $("out").innerHTML = `<div class="empty">${k ? "Tell DealScout your goal and total budget. It plans the shopping list, splits the money and picks the best price for each item." : "Describe a need above and DealScout will find matches and judge each price."}</div>`;
+  $("go").textContent = k ? "Plan my kit" : "Scout deals";
+}
+$("k-one").onclick = () => setKind(false);
+$("k-kit").onclick = () => setKind(true);
+$("examples").innerHTML = EXAMPLES.one.map((e) => `<button class="ex" type="button">${esc(e)}</button>`).join("");
 $("examples").addEventListener("click", (e) => { if (e.target.classList.contains("ex")) $("q").value = e.target.textContent; });
 
 function setMode(l) {
@@ -198,6 +230,34 @@ function render(d, target) {
 const ICON = { info: "•", good: "✓", warn: "!", skip: "–" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const SEG = ["var(--accent)", "var(--line-ok)", "#e9b872", "#e59aa8", "var(--muted)"];
+
+function renderKit(d, target) {
+  const pickOf = (r) => r.options.find((o) => o.product.id === r.pickId);
+  const picks = d.items.map((r) => ({ role: r.item.role, p: pickOf(r) }));
+  const segs = picks.map((x, i) => (x.p ? `<span title="${esc(x.role)}" style="width:${(x.p.product.currentPrice / d.plan.totalBudget) * 100}%;background:${SEG[i % SEG.length]}"></span>` : "")).join("");
+  const legend = picks.map((x, i) => `<span><i style="background:${SEG[i % SEG.length]}"></i>${esc(x.role)} ${x.p ? inr(x.p.product.currentPrice) : "-"}</span>`).join("");
+  const up = d.upgrade
+    ? `<div class="upgrade"><b>${inr(d.leftover)} left over.</b> Upgrade your ${esc(d.upgrade.role.toLowerCase())} from ${esc(d.upgrade.from.name)} to <b>${esc(d.upgrade.to.product.name)}</b> for ${inr(d.upgrade.extra)} more. It is at a 60-day low and still fits your need.</div>`
+    : d.leftover > 0 ? `<div class="upgrade"><b>${inr(d.leftover)} left over.</b> Nothing worth upgrading to right now.</div>` : "";
+  const sections = d.items.map((r) => {
+    const pick = pickOf(r);
+    const others = r.options.filter((o) => o !== pick);
+    return `<section class="kit-item"><h3>${esc(r.item.role)} <span class="chip">budget ${inr(r.item.budget)}</span></h3>
+      ${pick ? `<div class="cards">${card(pick)}</div>` : '<div class="empty">Nothing suitable within this budget.</div>'}
+      ${others.length ? `<details><summary>${others.length} other option${others.length > 1 ? "s" : ""} considered</summary><div class="cards">${others.map(card).join("")}</div></details>` : ""}</section>`;
+  }).join("");
+  target.innerHTML = `
+    <section class="panel kit-head">
+      <div class="spec"><span class="chip"><b>${esc(d.plan.goal)}</b></span><span class="chip">Total budget <b>${inr(d.plan.totalBudget)}</b></span><span class="chip" style="margin-left:auto">plan via ${d.via}</span></div>
+      <div class="bar" style="margin-top:16px">${segs}</div>
+      <div class="kit-total">${inr(d.total)} <small>of ${inr(d.plan.totalBudget)}</small></div>
+      <div class="legend" style="margin-top:6px">${legend}</div>
+      ${up}
+    </section>${sections}`;
+  $("note").textContent = d.source === "mock" ? "Showing test data: products and 60-day price history are simulated." : `Source: ${d.source}. Price history builds up daily from today.`;
+}
+
 $("go").onclick = async () => {
   const btn = $("go");
   btn.disabled = true; btn.textContent = "Scouting…";
@@ -226,7 +286,7 @@ $("go").onclick = async () => {
   })();
 
   try {
-    const r = await fetch("/api/scout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: $("q").value, live }) });
+    const r = await fetch(kit ? "/api/kit" : "/api/scout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: $("q").value, live }) });
     if (!r.ok) throw new Error((await r.json()).error || "Something went wrong");
     const reader = r.body.getReader(), dec = new TextDecoder();
     let buf = "";
@@ -258,9 +318,9 @@ $("go").onclick = async () => {
     det.innerHTML = `<summary>How DealScout decided (${ol.children.length} steps)</summary>`;
     det.appendChild(ol);
     trace.appendChild(det);
-    render(result, $("results"));
+    (kit ? renderKit : render)(result, $("results"));
   }
-  btn.disabled = false; btn.textContent = "Scout deals";
+  btn.disabled = false; btn.textContent = kit ? "Plan my kit" : "Scout deals";
 };
 </script>
 </body>

@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HistoryStore } from "./historyStore.ts";
+import { buildKitPlan, scoutKit } from "./kit.ts";
 import { scout } from "./scout.ts";
 import { GeminiSource } from "./sources/gemini.ts";
 import { MockSource } from "./sources/mock.ts";
@@ -60,6 +61,47 @@ createServer(async (req, res) => {
           via,
           source: source.name,
           items: items.map((i) => ({ product: i.product, verdict: i.verdict, fit: i.fit, history: i.history.map((h) => h.price) })),
+        });
+      } catch (err) {
+        send({ event: "error", error: (err as Error).message });
+      }
+      return res.end();
+    }
+    if (req.method === "POST" && req.url === "/api/kit") {
+      const { query, live } = JSON.parse((await readBody(req)) || "{}");
+      if (typeof query !== "string" || !query.trim()) return json(res, 400, { error: "Describe your goal and total budget first." });
+      if (live && !hasKey) return json(res, 400, { error: "Live mode needs GEMINI_API_KEY on the server." });
+
+      res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-cache" });
+      const send = (o: unknown) => res.write(JSON.stringify(o) + "\n");
+      try {
+        send({ event: "trace", kind: "info", text: "Reading your goal…" });
+        const planned = await buildKitPlan(query.trim());
+        if (!planned) {
+          send({ event: "error", error: "I can only plan a podcast kit offline. Set GEMINI_API_KEY to plan any goal." });
+          return res.end();
+        }
+        const { plan, via } = planned;
+        send({ event: "trace", kind: "info", text: `Planned a ${plan.goal} (${via}): ${plan.items.map((i) => i.role).join(", ")}` });
+
+        let source: PriceSource = new MockSource();
+        let store: HistoryStore | undefined;
+        if (live) {
+          store = new HistoryStore(join(root, "data/history.json"));
+          source = new GeminiSource({ apiKey: process.env.GEMINI_API_KEY! }, store);
+        }
+        const kit = await scoutKit(plan, source, (e) => send({ event: "trace", ...e }));
+        store?.save();
+        const ser = (i: any) => ({ product: i.product, verdict: i.verdict, fit: i.fit, history: i.history.map((h: any) => h.price) });
+        send({
+          event: "result",
+          via,
+          source: source.name,
+          plan: kit.plan,
+          total: kit.total,
+          leftover: kit.leftover,
+          items: kit.items.map((r) => ({ item: r.item, options: r.options.map(ser), pickId: r.pick?.product.id ?? null })),
+          upgrade: kit.upgrade && { role: kit.upgrade.role, from: kit.upgrade.from, extra: kit.upgrade.extra, to: ser(kit.upgrade.to) },
         });
       } catch (err) {
         send({ event: "error", error: (err as Error).message });

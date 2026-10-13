@@ -160,12 +160,52 @@ const fixtures: Fixture[] = [
   },
 ];
 
+const DEFAULT_CATEGORY = "audio interface";
+const norm = (c: string) => c.toLowerCase().trim();
+
+/** Compact builder for the extra kit categories. */
+function item(
+  category: string, id: string, name: string, store: string, price: number, mrp: number | undefined,
+  features: string[], base: number, shape?: (i: number, n: number, p: number) => number,
+): Fixture {
+  return {
+    product: { id, name, store, url: `https://example.com/${norm(store).replace(/\W+/g, "")}/${id}`, currentPrice: price, claimedOriginal: mrp, features, category },
+    history: series(id, base, DAYS, shape),
+  };
+}
+const lowToday = (to: number) => (i: number, n: number, p: number) => (i >= n - 2 ? to + 150 : p);
+
+fixtures.push(
+  // Microphones
+  item("microphone", "shure-sm58", "Shure SM58", "Amazon.in", 9800, 11500, ["XLR", "dynamic", "cardioid"], 10800, lowToday(9800)),
+  item("microphone", "samson-q2u", "Samson Q2U", "Flipkart", 5999, 9999, ["XLR", "USB", "dynamic", "cardioid"], 6000),
+  item("microphone", "xm8500", "Behringer XM8500", "Musicians Hub", 1799, 2099, ["XLR", "dynamic", "cardioid"], 1850),
+  item("microphone", "rode-nt-usb-mini", "Rode NT-USB Mini", "Amazon.in", 8999, 10999, ["USB", "condenser", "cardioid"], 9200),
+  item("microphone", "rode-podmic", "Rode PodMic", "Amazon.in", 11999, 13999, ["XLR", "dynamic", "cardioid"], 12500),
+  // Headphones
+  item("headphones", "ath-m40x", "Audio-Technica ATH-M40x", "Amazon.in", 7899, 9999, ["closed-back", "wired", "studio"], 8800, lowToday(7899)),
+  item("headphones", "sennheiser-hd280", "Sennheiser HD 280 Pro", "Flipkart", 6490, 7990, ["closed-back", "wired", "studio"], 6800),
+  item("headphones", "ath-m30x", "Audio-Technica ATH-M30x", "Flipkart", 5999, 9999, ["closed-back", "wired", "studio"], 6000),
+  item("headphones", "samson-sr850", "Samson SR850", "Musicians Hub", 2999, 3999, ["semi-open", "wired", "studio"], 3000),
+  item("headphones", "sony-mdr7506", "Sony MDR-7506", "Amazon.in", 9490, 11990, ["closed-back", "wired", "studio"], 9600),
+  // Boom arms
+  item("boom arm", "samson-mba38", "Samson MBA38", "Amazon.in", 2499, 3099, ["boom arm", "desk clamp"], 2800, lowToday(2499)),
+  item("boom arm", "tonor-boom", "Tonor Boom Arm", "Flipkart", 1299, 1499, ["boom arm", "desk clamp"], 1300),
+  item("boom arm", "rode-psa1", "Rode PSA1", "Amazon.in", 7499, 8999, ["boom arm", "desk clamp"], 7700),
+);
+
 /** Offline stand-in for real retailers. Swap for a grounded-search or retailer-API source. */
 export class MockSource implements PriceSource {
   name = "mock";
 
-  async discover(_spec: WatchSpec): Promise<Product[]> {
-    return fixtures.map((f) => f.product);
+  async discover(spec: WatchSpec): Promise<Product[]> {
+    const want = norm(spec.category);
+    return fixtures
+      .map((f) => f.product)
+      .filter((p) => {
+        const have = norm(p.category ?? DEFAULT_CATEGORY);
+        return have.includes(want) || want.includes(have);
+      });
   }
 
   async history(product: Product): Promise<PricePoint[]> {
