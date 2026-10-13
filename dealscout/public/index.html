@@ -4,74 +4,88 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DealScout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f8f7; --surface: #ffffff; --ink: #14201c; --muted: #5b6760; --line: #dfe7e3;
-    --green: #0f7b4f; --green-bg: #e6f3ec; --amber: #b36f00; --amber-bg: #fdf1d8;
-    --red: #b3261e; --red-bg: #fbe7e5; --grey-bg: #eef1ef; --accent: #0f7b4f; --on-accent: #ffffff;
-    --serif: Cambria, Georgia, "Times New Roman", serif;
+    --bg: #f5f3fa; --bg2: #eaf3f1; --surface: rgba(255,255,255,.78); --solid: #ffffff; --ink: #34324a; --muted: #7b7893; --line: #e6e3f0;
+    --accent: #7b6fe0; --accent-soft: #ebe8fb; --on-accent: #ffffff;
+    --green: #2f8a68; --green-bg: #dff3ea; --amber: #a9691c; --amber-bg: #fcebd2;
+    --rose: #b4485c; --rose-bg: #fce3e7; --grey-bg: #efedf6;
+    --line-ok: #4aa583; --shadow: 0 10px 30px rgba(86,76,160,.08);
+    --serif: Fraunces, Georgia, "Times New Roman", serif; --sans: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1613; --surface: #17201c; --ink: #e8efeb; --muted: #94a39b; --line: #2a362f;
-      --green: #4fc48a; --green-bg: #15301f; --amber: #f0b43c; --amber-bg: #33270d;
-      --red: #ff7a70; --red-bg: #3a1815; --grey-bg: #1f2a25; --accent: #4fc48a; --on-accent: #0f1613; }
+    :root { --bg: #1d1b2b; --bg2: #1a2425; --surface: rgba(43,40,63,.72); --solid: #2b283f; --ink: #e4e2f2; --muted: #9d9ab8; --line: #3a3753;
+      --accent: #a79df5; --accent-soft: #38345a; --on-accent: #1d1b2b;
+      --green: #8fd6b6; --green-bg: #25403a; --amber: #efc487; --amber-bg: #433420;
+      --rose: #f0a3b0; --rose-bg: #46283a; --grey-bg: #34314c; --line-ok: #7fcaa8; --shadow: 0 10px 30px rgba(0,0,0,.25); }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  h1 { font: 700 30px/1.1 var(--serif); margin: 0; }
-  .tag { color: var(--muted); }
-  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 20px; }
-  label { font-weight: 600; display: block; margin-bottom: 6px; }
-  textarea { width: 100%; min-height: 76px; resize: vertical; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
-    background: var(--bg); color: var(--ink); font: inherit; }
-  textarea:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
-  .examples { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  .ex { background: var(--grey-bg); border: 1px solid var(--line); color: var(--ink); border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
-  button.go { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 10px; padding: 10px 20px; font-weight: 700; font-size: 15px; cursor: pointer; }
+  body { margin: 0; color: var(--ink); font: 15px/1.55 var(--sans); min-height: 100vh;
+    background: radial-gradient(900px 500px at 10% -10%, var(--accent-soft), transparent 60%),
+                radial-gradient(800px 500px at 100% 0%, var(--bg2), transparent 55%), var(--bg); }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 16px 72px; }
+  header { text-align: center; padding: 12px 0 8px; }
+  .logo { display: inline-flex; align-items: center; gap: 10px; }
+  .mark { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; }
+  h1 { font: 600 34px/1.1 var(--serif); margin: 0; letter-spacing: -.01em; }
+  .tag { color: var(--muted); margin-top: 8px; font-size: 16px; }
+  .panel { background: var(--surface); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 22px; padding: 22px; margin-top: 26px; box-shadow: var(--shadow); }
+  label { font-weight: 500; display: block; margin-bottom: 8px; color: var(--muted); }
+  textarea { width: 100%; min-height: 82px; resize: vertical; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line);
+    background: var(--solid); color: var(--ink); font: inherit; }
+  textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .examples { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .ex { background: var(--accent-soft); border: 0; color: var(--accent); border-radius: 999px; padding: 6px 14px; font: 500 13px var(--sans); cursor: pointer; }
+  .ex:hover { filter: brightness(.97); }
+  button.go { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 14px; padding: 12px 24px; font: 700 15px var(--sans); cursor: pointer;
+    box-shadow: 0 6px 16px rgba(123,111,224,.28); }
   button.go:disabled { opacity: .6; cursor: wait; }
   .spacer { flex: 1; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .seg button { background: var(--surface); color: var(--ink); border: 0; padding: 8px 12px; font-size: 13px; cursor: pointer; }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .seg { display: inline-flex; background: var(--grey-bg); border-radius: 12px; padding: 3px; }
+  .seg button { background: transparent; color: var(--muted); border: 0; padding: 7px 14px; border-radius: 9px; font: 500 13px var(--sans); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--solid); color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
   .seg button:disabled { opacity: .45; cursor: not-allowed; }
   .spec { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .chip { background: var(--grey-bg); border-radius: 999px; padding: 3px 12px; font-size: 13px; }
+  .chip { background: var(--grey-bg); border-radius: 999px; padding: 4px 13px; font-size: 13px; color: var(--ink); }
   .chip b { font-weight: 700; }
-  .sum { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
-  .stat { flex: 1 1 150px; border-radius: 12px; padding: 12px 14px; }
-  .stat .n { font: 700 28px/1 var(--serif); }
+  .sum { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
+  .stat { flex: 1 1 180px; border-radius: 20px; padding: 16px 18px; display: flex; align-items: baseline; gap: 10px; }
+  .stat .n { font: 600 34px/1 var(--serif); }
   .stat.g { background: var(--green-bg); color: var(--green); } .stat.a { background: var(--amber-bg); color: var(--amber); }
-  .stat.r { background: var(--red-bg); color: var(--red); }
-  .cards { display: grid; gap: 12px; margin-top: 16px; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
-    display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 8px 20px; }
-  @media (max-width: 640px) { .card { grid-template-columns: minmax(0, 1fr); } }
-  .top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .badge { font-size: 11px; font-weight: 800; letter-spacing: .08em; border-radius: 6px; padding: 3px 8px; }
+  .stat.r { background: var(--rose-bg); color: var(--rose); }
+  .cards { display: grid; gap: 14px; margin-top: 18px; }
+  .card { background: var(--surface); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 22px; padding: 20px 22px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 10px 26px; box-shadow: var(--shadow); }
+  @media (max-width: 660px) { .card { grid-template-columns: minmax(0, 1fr); } }
+  .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge { font-size: 11px; font-weight: 700; letter-spacing: .08em; border-radius: 999px; padding: 4px 11px; }
   .b-buy_now { background: var(--green-bg); color: var(--green); } .b-wait { background: var(--amber-bg); color: var(--amber); }
   .b-skip { background: var(--grey-bg); color: var(--muted); }
-  .fake { background: var(--red-bg); color: var(--red); }
-  .name { font-weight: 700; font-size: 16px; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+  .fake { background: var(--rose-bg); color: var(--rose); }
+  .name { font: 600 19px/1.3 var(--serif); color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+  .name:hover { text-decoration: underline; text-decoration-color: var(--accent); }
   .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
-  .price { font: 700 22px/1.2 var(--serif); margin-top: 6px; }
-  .price s { color: var(--muted); font: 400 14px system-ui; margin-left: 6px; }
-  ul.why { margin: 8px 0 0; padding-left: 18px; color: var(--ink); font-size: 14px; }
+  .price { font: 600 26px/1.2 var(--serif); margin-top: 8px; }
+  .price s { color: var(--muted); font: 400 14px var(--sans); margin-left: 8px; }
+  ul.why { margin: 10px 0 0; padding-left: 18px; color: var(--ink); font-size: 14px; }
+  ul.why li::marker { color: var(--accent); }
+  .chart { align-self: center; background: var(--solid); border-radius: 16px; padding: 12px 12px 8px; }
   .chart svg { width: 100%; height: auto; display: block; }
   .chart .cap { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .conf { font-size: 12px; color: var(--muted); }
-  .empty, .err { text-align: center; color: var(--muted); padding: 28px 8px; }
-  .err { color: var(--red); }
-  .note { font-size: 12px; color: var(--muted); margin-top: 18px; }
-  .skeleton { height: 120px; border-radius: 14px; background: var(--grey-bg); }
+  .empty, .err { text-align: center; color: var(--muted); padding: 36px 8px; }
+  .err { color: var(--rose); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 20px; text-align: center; }
+  .skeleton { height: 130px; border-radius: 22px; background: var(--grey-bg); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>DealScout</h1>
+    <div class="logo"><span class="mark"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 11l2 2 3.5-4" stroke-linejoin="round"/></svg></span><h1>DealScout</h1></div>
     <div class="tag">Watches the need, not the product.</div>
   </header>
 
@@ -124,12 +138,12 @@ function chart(history, current, claimed) {
   const x = (i) => padX + (i / Math.max(n, 1)) * (W - 2 * padX);
   const y = (v) => padY + (1 - (v - lo) / (hi - lo)) * (H - 2 * padY);
   const pts = history.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const cur = `<circle cx="${x(n).toFixed(1)}" cy="${y(current).toFixed(1)}" r="4" fill="var(--accent)"/>`;
+  const cur = `<circle cx="${x(n).toFixed(1)}" cy="${y(current).toFixed(1)}" r="4.5" fill="var(--line-ok)"/>`;
   const claim = claimed
-    ? `<line x1="${padX}" x2="${W - padX}" y1="${y(claimed)}" y2="${y(claimed)}" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="4 3"/>`
+    ? `<line x1="${padX}" x2="${W - padX}" y1="${y(claimed)}" y2="${y(claimed)}" stroke="var(--rose)" stroke-width="1.6" stroke-dasharray="4 4" opacity=".8"/>`
     : "";
-  const line = n ? `<polyline points="${pts} ${x(n).toFixed(1)},${y(current).toFixed(1)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>` : "";
-  const cap = n ? `${n}-day price${claimed ? ` · <span style="color:var(--red)">- - store's "original"</span>` : ""}` : "No price history yet";
+  const line = n ? `<polyline points="${pts} ${x(n).toFixed(1)},${y(current).toFixed(1)}" fill="none" stroke="var(--line-ok)" stroke-width="2.2" stroke-linejoin="round"/>` : "";
+  const cap = n ? `${n}-day price${claimed ? ` · <span style="color:var(--rose)">- - store's "original"</span>` : ""}` : "No price history yet";
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history">${claim}${line}${cur}</svg><div class="cap">${cap}</div></div>`;
 }
 
