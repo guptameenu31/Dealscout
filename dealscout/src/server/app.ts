@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import express, { type Express } from "express";
+import { createGenerator, type TextGenerator } from "../ai/generator.ts";
 import type { Config } from "../config.ts";
 import { HistoryStore } from "../historyStore.ts";
 import { GeminiSource } from "../sources/gemini.ts";
@@ -19,8 +20,10 @@ import { specRouter } from "./routes/spec.ts";
 export interface AppDeps {
   config: Config;
   /** Overrides for tests. Defaults are the real implementations. */
+  /** Gemini access. Default: from config (Vertex AI or API key); null = AI disabled. */
+  generator?: TextGenerator | null;
   buildSpec?: (query: string) => Promise<BuiltSpec>;
-  /** null = live search disabled. Default: Gemini when GEMINI_API_KEY is set. */
+  /** null = live search disabled. Default: Gemini + Google Search when a generator is configured. */
   liveSource?: ((signal: AbortSignal) => PriceSource) | null;
   seededSource?: () => PriceSource;
   cache?: ResultCache;
@@ -31,21 +34,13 @@ export function createApp(deps: AppDeps): Express {
   const { config } = deps;
   const history = new HistoryStore(join(config.DATA_DIR, "history.json"));
   const cache = deps.cache ?? new ResultCache(join(config.DATA_DIR, "cache.json"));
-  const apiKey = config.GEMINI_API_KEY;
+  const generator = deps.generator !== undefined ? deps.generator : createGenerator(config);
 
   const liveSource =
     deps.liveSource !== undefined
       ? deps.liveSource
-      : apiKey
-        ? (signal: AbortSignal) =>
-            new GeminiSource(
-              {
-                apiKey,
-                model: config.GEMINI_MODEL,
-                fetchImpl: ((input, init) => fetch(input, { ...init, signal })) as typeof fetch,
-              },
-              history,
-            )
+      : generator
+        ? (signal: AbortSignal) => new GeminiSource({ generator, signal }, history)
         : null;
 
   const app = express();
@@ -58,7 +53,7 @@ export function createApp(deps: AppDeps): Express {
   const api = express.Router();
   api.use(express.json({ limit: "64kb" }));
   api.use(rateLimit(config.RATE_LIMIT_PER_MIN));
-  api.use(specRouter(deps.buildSpec ?? buildWatchSpec));
+  api.use(specRouter(deps.buildSpec ?? ((q: string) => buildWatchSpec(q, generator))));
   api.use(
     scoutRouter({
       liveSource,

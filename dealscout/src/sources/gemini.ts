@@ -1,110 +1,120 @@
-import type { PricePoint, PriceSource, Product, WatchSpec } from "../types.ts";
+import type { GroundingSource, TextGenerator } from "../ai/generator.ts";
 import type { HistoryStore } from "../historyStore.ts";
+import type { PricePoint, PriceSource, Product, RequirementCheck, WatchSpec } from "../types.ts";
 
-const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
-
+/** JSON Schema for the extraction step (standard JSON Schema; passed as responseJsonSchema). */
 const PRODUCT_SCHEMA = {
-  type: "ARRAY",
+  type: "array",
   items: {
-    type: "OBJECT",
+    type: "object",
     properties: {
-      name: { type: "STRING" },
-      store: { type: "STRING" },
-      url: { type: "STRING" },
-      currentPrice: { type: "NUMBER", description: "Current selling price in INR" },
-      claimedOriginal: { type: "NUMBER", description: "Struck-through MRP / 'was' price in INR, if shown" },
-      features: { type: "ARRAY", items: { type: "STRING" } },
+      name: { type: "string", description: "Exact model name" },
+      store: { type: "string" },
+      url: { type: "string", description: "Product page URL exactly as it appears in the text" },
+      currentPrice: { type: "number", description: "Current selling price in INR" },
+      claimedOriginal: { type: "number", description: "Struck-through MRP / 'was' price in INR, only if stated" },
+      features: { type: "array", items: { type: "string" } },
+      requirementChecks: {
+        type: "array",
+        description: "One entry per must-have requirement listed in the instructions",
+        items: {
+          type: "object",
+          properties: {
+            requirement: { type: "string", description: "The requirement, copied exactly" },
+            met: { type: "string", enum: ["yes", "no", "unknown"] },
+            evidence: { type: "string", description: "Short quote from the text supporting the answer; empty if unknown" },
+          },
+          required: ["requirement", "met", "evidence"],
+        },
+      },
     },
-    required: ["name", "store", "url", "currentPrice", "features"],
+    required: ["name", "store", "url", "currentPrice", "features", "requirementChecks"],
   },
 };
 
-type Fetch = typeof fetch;
-
 export interface GeminiSourceOptions {
-  apiKey: string;
-  model?: string;
+  generator: TextGenerator;
   maxProducts?: number;
-  fetchImpl?: Fetch;
+  /** Cancels in-flight Gemini calls (used for the live-search timeout). */
+  signal?: AbortSignal;
 }
 
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
+
+/** True if the product's site is one of the sites Google Search grounded the answer on; undefined if no sources. */
+export function linkInSources(url: string, sources: GroundingSource[]): boolean | undefined {
+  if (!sources.length) return undefined;
+  const host = hostOf(url);
+  if (!host) return false;
+  return sources.some((s) => {
+    const site = (s.domain || s.title || hostOf(s.uri)).toLowerCase().replace(/^www\./, "");
+    return !!site && (host === site || host.endsWith(`.${site}`) || site.endsWith(`.${host}`));
+  });
+}
+
 /**
- * Real product discovery. Two calls, because Gemini can't combine Google Search grounding with
- * a JSON response schema in one request:
- *   1. grounded search: find matching products and the prices seen in results (free text)
- *   2. structured extraction: turn that text into typed Product records
+ * Real product discovery with Gemini, in two calls:
+ *   1. grounded search (Google Search tool): find matching products and the prices visible in results (free text)
+ *   2. structured extraction (JSON schema): typed product records + a yes/no/unknown check per must-have, with evidence
+ * Two calls keep this working on every Gemini model; Gemini 3 can also combine search + schema in one call (preview).
  * Retailers don't expose price history, so each run records today's price into the HistoryStore.
  */
 export class GeminiSource implements PriceSource {
   name = "gemini-grounded";
-  private model: string;
   private max: number;
-  private fetchImpl: Fetch;
   private opts: GeminiSourceOptions;
   private store: HistoryStore;
 
   constructor(opts: GeminiSourceOptions, store: HistoryStore) {
     this.opts = opts;
     this.store = store;
-    this.model = opts.model ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
     this.max = opts.maxProducts ?? 8;
-    this.fetchImpl = opts.fetchImpl ?? fetch;
-  }
-
-  private async generate(body: unknown): Promise<string> {
-    const res = await this.fetchImpl(`${ENDPOINT}/${this.model}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": this.opts.apiKey },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const data: any = await res.json();
-    const parts: any[] = data.candidates?.[0]?.content?.parts ?? [];
-    const text = parts.map((p) => p.text ?? "").join("");
-    if (!text) throw new Error("Gemini returned no text");
-    return text;
   }
 
   async discover(spec: WatchSpec): Promise<Product[]> {
+    const { generator, signal } = this.opts;
     const must = spec.mustHaves.length ? `Must have: ${spec.mustHaves.join(", ")}.` : "";
     const nice = spec.niceToHaves.length ? `Nice to have: ${spec.niceToHaves.join(", ")}.` : "";
-    const grounded = await this.generate({
-      contents: [
-        {
-          parts: [
-            {
-              text: `Use Google Search to find up to ${this.max} different ${spec.category} models that Indian shoppers can buy right now for at most ₹${spec.budget}. ${must} ${nice}
+    const avoid = spec.excluded.length ? `Avoid products with: ${spec.excluded.join(", ")}.` : "";
+
+    const grounded = await generator.generate({
+      googleSearch: true,
+      signal,
+      prompt: `Use Google Search to find up to ${this.max} different ${spec.category} models that Indian shoppers can buy right now for at most ₹${spec.budget}. ${must} ${nice} ${avoid}
 Include options from Amazon.in, Flipkart and smaller or niche Indian stores, not just the big marketplaces.
-For each, report: exact model name, store, the product page URL, the current selling price in INR, the struck-through MRP/"was" price if the page shows one, and key features.
+For each, report: exact model name, store, the product page URL, the current selling price in INR, the struck-through MRP/"was" price if the page shows one, and key specifications (inputs, connectivity, power, etc.).
 Only report prices you actually saw in the search results. If a price or URL is not visible, write "unknown" rather than guessing.
 User request: ${spec.query}`,
-            },
-          ],
-        },
-      ],
-      tools: [{ google_search: {} }],
     });
 
-    const extracted = await this.generate({
-      contents: [
-        {
-          parts: [
-            {
-              text: `Extract product records from this text. Skip any product whose price or URL is "unknown". Prices are INR numbers (no symbols). Leave claimedOriginal out unless an original/MRP price was stated.\n\n${grounded}`,
-            },
-          ],
-        },
-      ],
-      generationConfig: { responseMimeType: "application/json", responseSchema: PRODUCT_SCHEMA },
+    const requirements = spec.mustHaves.length
+      ? `For EVERY product, fill requirementChecks with exactly one entry for each of these must-have requirements: ${JSON.stringify(spec.mustHaves)}.
+Set met to "yes" only if the text states it, "no" if the text contradicts it, and "unknown" otherwise. Quote the supporting text in evidence.`
+      : "Leave requirementChecks empty.";
+
+    const extracted = await generator.generate({
+      jsonSchema: PRODUCT_SCHEMA,
+      signal,
+      prompt: `Extract product records from the text below. Skip any product whose price or URL is "unknown". Prices are INR numbers (no symbols). Leave claimedOriginal out unless an original/MRP price was stated.
+${requirements}
+Do not add facts that are not in the text.
+
+${grounded.text}`,
     });
 
-    return this.normalize(JSON.parse(extracted));
+    return this.normalize(JSON.parse(extracted.text), grounded.sources, spec.mustHaves);
   }
 
-  /** Validate model output, drop junk, dedupe, and record today's price. */
-  normalize(raw: any[]): Product[] {
+  /** Validate model output, drop junk, dedupe, attach checks and source matching, record today's price. */
+  normalize(raw: any, sources: GroundingSource[] = [], mustHaves: string[] = []): Product[] {
     const seen = new Set<string>();
     const out: Product[] = [];
     const observedAt = new Date().toISOString();
@@ -124,6 +134,8 @@ User request: ${spec.query}`,
         claimedOriginal: mrp > price ? mrp : undefined,
         features: Array.isArray(r.features) ? r.features.map(String) : [],
         observedAt,
+        mustHaveChecks: cleanChecks(r.requirementChecks, mustHaves),
+        linkInSources: linkInSources(r.url, sources),
       });
       this.store.record(id, price);
     }
@@ -133,4 +145,17 @@ User request: ${spec.query}`,
   async history(product: Product): Promise<PricePoint[]> {
     return this.store.get(product.id);
   }
+}
+
+/** Keep only checks for the user's actual must-haves (model output is untrusted), one per requirement. */
+function cleanChecks(raw: unknown, mustHaves: string[]): RequirementCheck[] | undefined {
+  if (!mustHaves.length || !Array.isArray(raw)) return undefined;
+  const out: RequirementCheck[] = [];
+  for (const m of mustHaves) {
+    const c = raw.find((x: any) => typeof x?.requirement === "string" && x.requirement.trim().toLowerCase() === m.toLowerCase());
+    if (!c) continue;
+    const met = c.met === "yes" || c.met === "no" ? c.met : "unknown";
+    out.push({ requirement: m, met, evidence: String(c.evidence ?? "").slice(0, 160) });
+  }
+  return out;
 }

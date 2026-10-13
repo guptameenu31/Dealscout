@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { scoutDetailed, type ScoutResult } from "../scout.ts";
+import { evaluateMustHaves, scoutDetailed, type ScoutResult } from "../scout.ts";
 import { computeStats } from "../stats.ts";
 import type { PriceSource, ScoredProduct, WatchSpec } from "../types.ts";
 import type { ApiPricePoint, Provenance, ScoredItem, ScoutMode, ScoutResponse } from "./apiTypes.ts";
@@ -37,7 +37,20 @@ function dataNotes(provenance: Provenance, history: ApiPricePoint[]): string[] {
   return notes;
 }
 
-function toItem(sp: ScoredProduct, provenance: Provenance, now: string): ScoredItem {
+/** Notes from live discovery: Gemini's requirement evidence and whether the link matched Google's sources. */
+function discoveryNotes(sp: ScoredProduct, spec: WatchSpec): string[] {
+  const notes: string[] = [];
+  const p = sp.product;
+  if (p.linkInSources === false) notes.push("Store link was not among Google Search's sources; verify it before buying.");
+  for (const c of p.mustHaveChecks ?? []) {
+    if (c.met === "yes") notes.push(`Meets "${c.requirement}"${c.evidence ? `: "${c.evidence}"` : ""} (checked by Gemini).`);
+  }
+  const { unconfirmed } = evaluateMustHaves(p, spec.mustHaves);
+  if (unconfirmed.length) notes.push(`Could not confirm: ${unconfirmed.join(", ")}. Check the listing.`);
+  return notes;
+}
+
+function toItem(sp: ScoredProduct, provenance: Provenance, now: string, spec: WatchSpec): ScoredItem {
   const history: ApiPricePoint[] = sp.history.map((h) => ({
     date: h.date,
     price: h.price,
@@ -57,7 +70,7 @@ function toItem(sp: ScoredProduct, provenance: Provenance, now: string): ScoredI
     history,
     stats: computeStats(history),
     verdict: sp.verdict,
-    dataNotes: dataNotes(provenance, history),
+    dataNotes: [...discoveryNotes(sp, spec), ...dataNotes(provenance, history)],
   };
 }
 
@@ -75,7 +88,7 @@ export function toResponse(
     fallbackReason,
     cachedAt: null,
     spec,
-    items: result.items.map((i) => toItem(i, provenance, now)),
+    items: result.items.map((i) => toItem(i, provenance, now, spec)),
     filteredOut: result.filteredOut.map((f) => ({ name: f.product.name, store: f.product.store, reason: f.reason })),
   };
 }

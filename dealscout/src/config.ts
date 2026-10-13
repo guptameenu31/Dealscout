@@ -6,9 +6,18 @@ const env = <T extends z.ZodType>(schema: T) => z.preprocess(blankToUndefined, s
 
 const EnvSchema = z.object({
   PORT: env(z.coerce.number().int().positive().default(8080)),
-  /** Optional. Without it, /api/spec uses the offline parser and /api/scout falls back to cached/seeded data. */
+  /** Gemini API key (local dev). Without any AI config, /api/spec uses the offline parser and /api/scout falls back. */
   GEMINI_API_KEY: env(z.string().trim().optional()),
-  GEMINI_MODEL: env(z.string().trim().default("gemini-2.5-flash")),
+  /** true = use Vertex AI in GOOGLE_CLOUD_PROJECT (no key; Cloud Run's service account). Wins over GEMINI_API_KEY. */
+  GOOGLE_GENAI_USE_VERTEXAI: env(
+    z
+      .enum(["true", "false", "1", "0"])
+      .default("false")
+      .transform((v) => v === "true" || v === "1"),
+  ),
+  GOOGLE_CLOUD_PROJECT: env(z.string().trim().optional()),
+  GOOGLE_CLOUD_LOCATION: env(z.string().trim().default("global")),
+  GEMINI_MODEL: env(z.string().trim().default("gemini-3.8-flash")),
   /** Max time for one live discovery before falling back. */
   LIVE_TIMEOUT_MS: env(z.coerce.number().int().positive().default(25_000)),
   /** Where the JSON price history and result cache are written (local dev; Firestore later). */
@@ -21,10 +30,15 @@ const EnvSchema = z.object({
   K_REVISION: env(z.string().default("dev")),
 });
 
-export type Config = z.infer<typeof EnvSchema>;
+const ConfigSchema = EnvSchema.refine((c) => !c.GOOGLE_GENAI_USE_VERTEXAI || !!c.GOOGLE_CLOUD_PROJECT, {
+  message: "GOOGLE_CLOUD_PROJECT is required when GOOGLE_GENAI_USE_VERTEXAI=true",
+  path: ["GOOGLE_CLOUD_PROJECT"],
+});
+
+export type Config = z.infer<typeof ConfigSchema>;
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
-  const parsed = EnvSchema.safeParse(source);
+  const parsed = ConfigSchema.safeParse(source);
   if (!parsed.success) {
     throw new Error(`Invalid environment configuration:\n${z.prettifyError(parsed.error)}`);
   }

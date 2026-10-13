@@ -1,4 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createGenerator } from "./ai/generator.ts";
+import { loadConfig } from "./config.ts";
 import { renderHtml, renderText } from "./digest.ts";
 import { HistoryStore } from "./historyStore.ts";
 import { scout } from "./scout.ts";
@@ -8,7 +10,7 @@ import { buildWatchSpec } from "./spec.ts";
 import type { PriceSource } from "./types.ts";
 
 // Usage: npm run demo -- [--live] [--seed-demo] "your request"
-//   --live       discover real products with Gemini + Google Search (needs GEMINI_API_KEY)
+//   --live       discover real products with Gemini + Google Search (needs GEMINI_API_KEY or Vertex AI config)
 //   --seed-demo  DEMO ONLY: backfill synthetic price history for newly found products
 const args = process.argv.slice(2);
 const live = args.includes("--live");
@@ -17,19 +19,19 @@ const query =
   args.filter((a) => !a.startsWith("--")).join(" ") ||
   "I need a 2-input USB audio interface with phantom power for home recording, under ₹15k";
 
-const { spec, via } = await buildWatchSpec(query);
+const generator = createGenerator(loadConfig());
+const { spec, via } = await buildWatchSpec(query, generator);
 console.log(`Watch spec (via ${via}):`);
 console.log(JSON.stringify(spec, null, 2), "\n");
 
 let source: PriceSource = new MockSource();
 let store: HistoryStore | undefined;
 if (live) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("--live needs GEMINI_API_KEY (get one at https://aistudio.google.com). Using mock data instead.\n");
+  if (!generator) {
+    console.error("--live needs GEMINI_API_KEY or Vertex AI settings in .env. Using mock data instead.\n");
   } else {
     store = new HistoryStore("data/history.json");
-    source = new GeminiSource({ apiKey }, store);
+    source = new GeminiSource({ generator }, store);
   }
 }
 console.log(`Source: ${source.name}\n`);

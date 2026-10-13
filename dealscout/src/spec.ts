@@ -1,3 +1,4 @@
+import type { TextGenerator } from "./ai/generator.ts";
 import type { WatchSpec } from "./types.ts";
 import { DEFAULT_BUDGET, normalizeSpec } from "./watchSpec.ts";
 
@@ -39,17 +40,18 @@ export function heuristicSpec(query: string): WatchSpec {
   };
 }
 
-const SCHEMA = {
-  type: "OBJECT",
+/** JSON Schema for Gemini structured output (passed as responseJsonSchema). */
+const SPEC_SCHEMA = {
+  type: "object",
   properties: {
-    category: { type: "STRING" },
-    budget: { type: "NUMBER", description: "Maximum budget in INR" },
-    mustHaves: { type: "ARRAY", items: { type: "STRING" } },
-    niceToHaves: { type: "ARRAY", items: { type: "STRING" } },
-    excluded: { type: "ARRAY", items: { type: "STRING" }, description: "Features the user explicitly does not want" },
-    searchTerms: { type: "ARRAY", items: { type: "STRING" } },
-    needsClarification: { type: "BOOLEAN", description: "True only if the request is too vague to search for" },
-    clarificationQuestion: { type: "STRING", description: "One short question to ask when needsClarification is true" },
+    category: { type: "string", description: "Short product category, e.g. 'audio interface'" },
+    budget: { type: "number", description: "Maximum budget in INR" },
+    mustHaves: { type: "array", items: { type: "string" } },
+    niceToHaves: { type: "array", items: { type: "string" } },
+    excluded: { type: "array", items: { type: "string" }, description: "Features the user explicitly does not want" },
+    searchTerms: { type: "array", items: { type: "string" } },
+    needsClarification: { type: "boolean", description: "True only if the request is too vague to search for" },
+    clarificationQuestion: { type: "string", description: "One short question to ask when needsClarification is true" },
   },
   required: ["category", "budget", "mustHaves", "niceToHaves", "excluded", "searchTerms", "needsClarification"],
 };
@@ -69,36 +71,20 @@ function heuristicResult(query: string): BuiltSpec {
   return { spec: heuristicSpec(query), via: "heuristic", warnings };
 }
 
-/** Gemini turns plain English into a watch spec; falls back to the heuristic on any failure. */
-export async function buildWatchSpec(query: string): Promise<BuiltSpec> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return heuristicResult(query);
-
-  const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+/** Gemini turns plain English into a watch spec; falls back to the heuristic on any failure or without AI. */
+export async function buildWatchSpec(query: string, generator: TextGenerator | null): Promise<BuiltSpec> {
+  if (!generator) return heuristicResult(query);
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `Turn this shopping request into a watch spec for Indian retailers. Budget is in INR. Keep must-haves to hard requirements only, phrased as short feature names (e.g. "2 inputs", "48V phantom power"). Only set needsClarification if the request is too vague to search for.\n\nRequest: ${query}`,
-              },
-            ],
-          },
-        ],
-        generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA },
-      }),
+    const res = await generator.generate({
+      jsonSchema: SPEC_SCHEMA,
+      prompt: `Turn this shopping request into a watch spec for Indian retailers. Budget is in INR. Keep must-haves to hard requirements only, phrased as short feature names (e.g. "2 inputs", "48V phantom power"). Only set needsClarification if the request is too vague to search for.
+
+Request: ${query}`,
     });
-    if (!res.ok) throw new Error(`Gemini ${res.status}`);
-    const data: any = await res.json();
-    const parsed = JSON.parse(data.candidates[0].content.parts[0].text);
-    const { spec, warnings } = normalizeSpec(query, parsed, parseBudget(query));
+    const { spec, warnings } = normalizeSpec(query, JSON.parse(res.text), parseBudget(query));
     return { spec, via: "gemini", warnings };
   } catch (err) {
-    console.warn(`Gemini spec failed (${(err as Error).message}); using heuristic.`);
+    console.warn(`Gemini spec failed (${String((err as Error)?.message ?? err).slice(0, 200)}); using heuristic.`);
     return heuristicResult(query);
   }
 }
