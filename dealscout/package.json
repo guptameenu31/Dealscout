@@ -5,13 +5,16 @@
   "type": "module",
   "description": "AI shopping scout that watches a need, not a product (prototype)",
   "scripts": {
-    "demo": "node src/demo.ts",
-    "test": "node --test test/*.test.ts"
+    "demo": "node --env-file-if-exists=.env src/demo.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc -p .",
+    "check": "npm run typecheck && npm test"
   },
   "engines": {
     "node": ">=22.18"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5"
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.0"
   }
 }
