@@ -1,6 +1,6 @@
 # DealScout: Watch the need, not the product
 
-**One-liner:** Tell DealScout what you want and what you can spend. It finds every match across stores, tracks prices daily, and emails you when a deal is real.
+**One-liner:** Your buying advisor. Tell DealScout your goal and your budget. It plans what to buy, splits the money, finds every match across stores, tracks prices, and tells you what to buy now, what to wait on, and which discounts are fake.
 
 ## The problem
 Priya wants an audio interface under ₹15k. Today she checks Amazon, Flipkart and two niche music stores every few days. Price trackers don't help, because they only watch a link she has already picked. And that "40% off" banner is often measured against a price that was inflated last week.
@@ -15,6 +15,9 @@ Priya wants an audio interface under ₹15k. Today she checks Amazon, Flipkart a
    - 🟢 **Buy now:** at its lowest in 90 days, with the reason
    - 🟡 **Wait:** a discount that looks fake, or a price that is trending down
    - 📉 **Lowest seen:** the best price so far for each match
+
+## Kit mode: from a goal to a whole shopping list
+"I'm starting a podcast and have ₹30,000 total." Gemini plans the list (microphone, audio interface, headphones, boom arm) and splits the budget. Each item goes through the same scout, fit check and fake-discount check. The result is one pick per item, a budget bar, and a real upgrade if money is left over (for example ₹1,712 left buys a headphone upgrade that is at a 60-day low).
 
 ## Why it's different
 | Price trackers | DealScout |
