@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import type { Config } from "../config.ts";
 
 /** A web page Google Search returned while grounding an answer. */
@@ -15,6 +15,8 @@ export interface GenerateRequest {
   jsonSchema?: object;
   /** Let Gemini use Google Search and return the sources it used. */
   googleSearch?: boolean;
+  /** Gemini 3 reasoning depth. "low" is much faster for search/extraction; omitted = model default (high). */
+  thinkingLevel?: "low" | "high";
   signal?: AbortSignal;
 }
 
@@ -52,6 +54,7 @@ export class GenAIGenerator implements TextGenerator {
         abortSignal: req.signal,
         temperature: 0.2, // extraction work: favour consistency over creativity
         ...(req.googleSearch ? { tools: [{ googleSearch: {} }] } : {}),
+        ...(req.thinkingLevel ? { thinkingConfig: { thinkingLevel: req.thinkingLevel === "low" ? ThinkingLevel.LOW : ThinkingLevel.HIGH } } : {}),
         ...(req.jsonSchema ? { responseMimeType: "application/json", responseJsonSchema: req.jsonSchema } : {}),
       },
     });

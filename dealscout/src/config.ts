@@ -19,7 +19,7 @@ const EnvSchema = z.object({
   GOOGLE_CLOUD_LOCATION: env(z.string().trim().default("global")),
   GEMINI_MODEL: env(z.string().trim().default("gemini-3.8-flash")),
   /** Max time for one live discovery before falling back. */
-  LIVE_TIMEOUT_MS: env(z.coerce.number().int().positive().default(25_000)),
+  LIVE_TIMEOUT_MS: env(z.coerce.number().int().positive().default(90_000)),
   /** Where the JSON price history and result cache are written (local dev; Firestore later). */
   DATA_DIR: env(z.string().default("data")),
   /** POST requests per minute per client IP on /api. 0 disables the limit. */
