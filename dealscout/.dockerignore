@@ -1,9 +1,5 @@
 node_modules
-web/node_modules
-web/dist
+web
 data
-out
 .env
 .env.*
-!.env.example
-*.log
