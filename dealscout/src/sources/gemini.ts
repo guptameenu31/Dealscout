@@ -76,7 +76,7 @@ export class GeminiSource implements PriceSource {
   constructor(opts: GeminiSourceOptions, store: HistoryStore) {
     this.opts = opts;
     this.store = store;
-    this.max = opts.maxProducts ?? 8;
+    this.max = opts.maxProducts ?? 5; // each extra product costs several more Google Search rounds
   }
 
   async discover(spec: WatchSpec): Promise<Product[]> {
@@ -87,6 +87,7 @@ export class GeminiSource implements PriceSource {
 
     const grounded = await generator.generate({
       googleSearch: true,
+      thinkingLevel: "low", // default thinking ran ~2x the search rounds (80s+ vs ~35-45s)
       signal,
       prompt: `Use Google Search to find up to ${this.max} different ${spec.category} models that Indian shoppers can buy right now for at most ₹${spec.budget}. ${must} ${nice} ${avoid}
 Include options from Amazon.in, Flipkart and smaller or niche Indian stores, not just the big marketplaces.
@@ -102,6 +103,7 @@ Set met to "yes" only if the text states it, "no" if the text contradicts it, an
 
     const extracted = await generator.generate({
       jsonSchema: PRODUCT_SCHEMA,
+      thinkingLevel: "low",
       signal,
       prompt: `Extract product records from the text below. Skip any product whose price or URL is "unknown". Prices are INR numbers (no symbols). Leave claimedOriginal out unless an original/MRP price was stated.
 ${requirements}
