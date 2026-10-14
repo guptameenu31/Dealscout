@@ -1,5 +1,5 @@
-# Local run of the same container Cloud Run uses:  docker compose up --build
-# Then open http://localhost:8080
+# Run both dev servers in containers:  docker compose up --build
+# Then open http://localhost:5173
 services:
   api:
     build: .
@@ -9,8 +9,18 @@ services:
       - path: .env
         required: false
     environment:
-      DATA_DIR: /data
+      GOOGLE_APPLICATION_CREDENTIALS: /gcloud/application_default_credentials.json
     volumes:
-      - ./data:/data # price history + result cache survive restarts locally
+      - ./data:/app/data # price history + result cache survive restarts
+      # Vertex AI login from `gcloud auth application-default login` (Cloud Run provides its own; Windows path)
+      - ${APPDATA}/gcloud:/gcloud:ro
 
-  # Next step (database): a Firestore emulator service goes here.
+  web:
+    build: ./web
+    ports:
+      - "5173:5173"
+    environment:
+      API_URL: http://api:8080
+      VITE_USE_MOCK: "false"
+    depends_on:
+      - api

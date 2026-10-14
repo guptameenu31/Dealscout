@@ -4,8 +4,8 @@ import * as mock from "./mock";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
-// Must exceed the server's LIVE_TIMEOUT_MS (90s) so a slow live search can still answer with its fallback.
-const SCOUT_TIMEOUT_MS = 100_000;
+// Must exceed the server's LIVE_TIMEOUT_MS (120s) so a slow live search can still answer with its fallback.
+const SCOUT_TIMEOUT_MS = 130_000;
 
 async function apiFetch<T>(path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
   const { timeoutMs = 30_000, ...rest } = init;
