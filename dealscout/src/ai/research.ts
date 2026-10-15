@@ -132,6 +132,7 @@ export async function shortlistModels(spec: WatchSpec, generator: TextGenerator,
   const avoid = spec.excluded.length ? `Avoid: ${spec.excluded.join(", ")}.` : "";
   const res = await generator.generate({
     ...step,
+    label: "shortlist",
     googleSearch: true,
     jsonSchema: SHORTLIST_SCHEMA,
     signal,
@@ -207,6 +208,7 @@ export async function researchDetails(
     : "Leave mustHaveChecks empty.";
   const res = await generator.generate({
     ...step,
+    label: `details: ${model.name}`,
     googleSearch: true,
     jsonSchema: DETAILS_SCHEMA,
     signal,

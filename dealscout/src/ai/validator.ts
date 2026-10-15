@@ -113,6 +113,7 @@ export async function judgeListings(
 
   const res = await generator.generate({
     ...step,
+    label: "validate",
     jsonSchema: VERDICT_SCHEMA,
     signal,
     prompt: `Today is ${new Date().toISOString().slice(0, 10)}. A shopper in India is looking for: ${spec.category}. Below are Google Shopping listings found for each researched model.
