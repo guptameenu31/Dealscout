@@ -302,6 +302,11 @@ test("HedgedGenerator: the backup call goes to the fallback model; createGenerat
   assert.equal(calls[1].model, "gemini-3.7-flash");
   assert.equal(calls[1].label, "shortlist (backup)");
   assert.match(logs[0], /shortlist: backup call on gemini-3\.7-flash at low thinking after \d+ms, primary failed/);
+
+  // A call already on the fallback model backs up on the default model (gen.model = "m").
+  const again = scripted([{ ms: 1, fail: "429" }, { ms: 1, text: "default" }]);
+  await new HedgedGenerator(again.gen, 5000, "gemini-3.7-flash", () => {}).generate({ prompt: "p", model: "gemini-3.7-flash" });
+  assert.equal(again.calls[1].model, "m");
   assert.equal(loadConfig({}).GEMINI_FALLBACK_MODEL, "gemini-3.7-flash");
   assert.equal(loadConfig({ GEMINI_FALLBACK_MODEL: "x" }).GEMINI_FALLBACK_MODEL, "x");
 });
