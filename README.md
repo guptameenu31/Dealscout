@@ -6,6 +6,8 @@ DealScout is an AI shopping advisor for India. You describe what you need and wh
 
 **Live prototype:** https://dealscout-web-eugmzmqdna-el.a.run.app/ (a full search takes about a minute)
 
+**Demo video:** https://drive.google.com/file/d/1aF0zHBZMzMZGKyF3YMHI5AmLXUrE2fNP/view (1.5 minutes)
+
 Built for the Google Cloud AI Builder Cup 2026, category *Retail & Commerce: Intelligent Customer and Business Experiences*.
 
 ## The problem
