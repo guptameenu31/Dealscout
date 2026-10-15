@@ -131,19 +131,23 @@ export class GenAIGenerator implements TextGenerator {
  * Hedged Gemini calls. Grounded calls sometimes stall until the 120 s step timeout (Oct 15 logs: 502s at exactly
  * 120 s while sibling calls answered in 8-72 s). If a call hasn't answered after hedgeAfterMs, or fails before then,
  * one backup call starts at low thinking; the first answer wins and the other is cancelled.
+ * The backup goes to fallbackModel when set: Vertex capacity is per model, and on Oct 15 gemini-3.8-flash returned
+ * 429 "Resource exhausted" and ran ~5x slower than other Gemini 3 models.
  */
 export class HedgedGenerator implements TextGenerator {
   readonly model: string;
   readonly backend: "vertex-ai" | "gemini-api";
   private inner: TextGenerator;
   private hedgeAfterMs: number;
+  private fallbackModel: string | undefined;
   private log: (line: string) => void;
 
-  constructor(inner: TextGenerator, hedgeAfterMs: number, log: (line: string) => void = console.log) {
+  constructor(inner: TextGenerator, hedgeAfterMs: number, fallbackModel?: string, log: (line: string) => void = console.log) {
     this.inner = inner;
     this.model = inner.model;
     this.backend = inner.backend;
     this.hedgeAfterMs = hedgeAfterMs;
+    this.fallbackModel = fallbackModel;
     this.log = log;
   }
 
@@ -191,8 +195,9 @@ export class HedgedGenerator implements TextGenerator {
         if (hedged || done) return;
         hedged = true;
         clearTimeout(timer);
-        this.log(`gemini: ${what}: backup call at low thinking after ${Date.now() - started}ms, ${why}`);
-        run({ ...req, thinkingLevel: "low", signal: linked(backup), label: `${what} (backup)` }, "backup");
+        const model = this.fallbackModel ?? req.model ?? this.model;
+        this.log(`gemini: ${what}: backup call on ${model} at low thinking after ${Date.now() - started}ms, ${why}`);
+        run({ ...req, model, thinkingLevel: "low", signal: linked(backup), label: `${what} (backup)` }, "backup");
       };
 
       timer = setTimeout(() => startBackup("no answer yet"), this.hedgeAfterMs);
@@ -204,20 +209,20 @@ export class HedgedGenerator implements TextGenerator {
 /**
  * Vertex AI (Google Cloud project + service account / ADC; used on Cloud Run) when
  * GOOGLE_GENAI_USE_VERTEXAI=true, otherwise the Gemini API with GEMINI_API_KEY. Null = AI not configured.
- * Calls are hedged after GEMINI_HEDGE_MS (0 = off).
+ * Calls are hedged after GEMINI_HEDGE_MS (0 = off), with the backup on GEMINI_FALLBACK_MODEL.
  */
 export function createGenerator(config: Config): TextGenerator | null {
+  const hedged = (inner: GenAIGenerator) => new HedgedGenerator(inner, config.GEMINI_HEDGE_MS, config.GEMINI_FALLBACK_MODEL);
   if (config.GOOGLE_GENAI_USE_VERTEXAI) {
     const ai = new GoogleGenAI({
       vertexai: true,
       project: config.GOOGLE_CLOUD_PROJECT,
       location: config.GOOGLE_CLOUD_LOCATION,
     });
-    return new HedgedGenerator(new GenAIGenerator(ai, config.GEMINI_MODEL, "vertex-ai"), config.GEMINI_HEDGE_MS);
+    return hedged(new GenAIGenerator(ai, config.GEMINI_MODEL, "vertex-ai"));
   }
   if (config.GEMINI_API_KEY) {
-    const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
-    return new HedgedGenerator(new GenAIGenerator(ai, config.GEMINI_MODEL, "gemini-api"), config.GEMINI_HEDGE_MS);
+    return hedged(new GenAIGenerator(new GoogleGenAI({ apiKey: config.GEMINI_API_KEY }), config.GEMINI_MODEL, "gemini-api"));
   }
   return null;
 }

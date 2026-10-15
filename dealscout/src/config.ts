@@ -25,6 +25,8 @@ const EnvSchema = z.object({
   GEMINI_VALIDATOR_MODEL: env(z.string().trim().optional()),
   /** Start a backup Gemini call (low thinking) when one hasn't answered after this many ms. 0 disables. */
   GEMINI_HEDGE_MS: env(z.coerce.number().int().nonnegative().default(50_000)),
+  /** Model for that backup call (must support Google Search + JSON schema together). Set to GEMINI_MODEL to keep one model. */
+  GEMINI_FALLBACK_MODEL: env(z.string().trim().default("gemini-3.7-flash")),
   /** Serper.dev key for Google Shopping prices (server-side only). Unset = v1 Gemini-only path. */
   SERPER_API_KEY: env(z.string().trim().optional()),
   /** Serper results per researched model passed to the AI validator (n models x k listings). */

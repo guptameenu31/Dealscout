@@ -240,7 +240,7 @@ function scripted(steps: { ms: number; text?: string; fail?: string }[]) {
 test("HedgedGenerator: a fast answer needs no backup call", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
   const { gen, calls } = scripted([{ ms: 5, text: "first" }]);
-  const res = await new HedgedGenerator(gen, 50, () => {}).generate({ prompt: "p", thinkingLevel: "medium" });
+  const res = await new HedgedGenerator(gen, 50, undefined, () => {}).generate({ prompt: "p", thinkingLevel: "medium" });
   assert.equal(res.text, "first");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].thinkingLevel, "medium");
@@ -250,20 +250,20 @@ test("HedgedGenerator: a slow call gets a low-thinking backup; the first answer 
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
   const { gen, calls } = scripted([{ ms: 1000, text: "slow" }, { ms: 5, text: "backup" }]);
   const logs: string[] = [];
-  const res = await new HedgedGenerator(gen, 20, (l) => logs.push(l)).generate({ prompt: "p", thinkingLevel: "medium" });
+  const res = await new HedgedGenerator(gen, 20, undefined, (l) => logs.push(l)).generate({ prompt: "p", thinkingLevel: "medium" });
   assert.equal(res.text, "backup");
   assert.equal(calls.length, 2);
   assert.equal(calls[1].thinkingLevel, "low");
   assert.equal(calls[1].prompt, "p");
   assert.equal(calls[0].signal?.aborted, true);
-  assert.match(logs.join("\n"), /backup call at low thinking.*no answer yet[\s\S]*backup answered/);
+  assert.match(logs.join("\n"), /backup call on m at low thinking.*no answer yet[\s\S]*backup answered/);
 });
 
 test("HedgedGenerator: an early failure starts the backup at once", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
   const { gen, calls } = scripted([{ ms: 1, fail: "429" }, { ms: 1, text: "backup" }]);
   const started = Date.now();
-  const res = await new HedgedGenerator(gen, 5000, () => {}).generate({ prompt: "p" });
+  const res = await new HedgedGenerator(gen, 5000, undefined, () => {}).generate({ prompt: "p" });
   assert.equal(res.text, "backup");
   assert.equal(calls.length, 2);
   assert.ok(Date.now() - started < 1000);
@@ -272,22 +272,36 @@ test("HedgedGenerator: an early failure starts the backup at once", async () => 
 test("HedgedGenerator: both calls failing rejects with the first error; at most one backup", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
   const { gen, calls } = scripted([{ ms: 1, fail: "first" }, { ms: 1, fail: "second" }]);
-  await assert.rejects(new HedgedGenerator(gen, 5000, () => {}).generate({ prompt: "p" }), /first/);
+  await assert.rejects(new HedgedGenerator(gen, 5000, undefined, () => {}).generate({ prompt: "p" }), /first/);
   assert.equal(calls.length, 2);
 });
 
 test("HedgedGenerator: the caller's timeout cancels everything and starts no backup", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
   const { gen, calls } = scripted([{ ms: 1000, text: "slow" }]);
-  await assert.rejects(new HedgedGenerator(gen, 500, () => {}).generate({ prompt: "p", signal: AbortSignal.timeout(10) }), /aborted/);
+  await assert.rejects(new HedgedGenerator(gen, 500, undefined, () => {}).generate({ prompt: "p", signal: AbortSignal.timeout(10) }), /aborted/);
   assert.equal(calls.length, 1);
 });
 
 test("HedgedGenerator: GEMINI_HEDGE_MS=0 passes calls straight through", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
   const { gen, calls } = scripted([{ ms: 1, fail: "boom" }]);
-  await assert.rejects(new HedgedGenerator(gen, 0, () => {}).generate({ prompt: "p" }), /boom/);
+  await assert.rejects(new HedgedGenerator(gen, 0, undefined, () => {}).generate({ prompt: "p" }), /boom/);
   assert.equal(calls.length, 1);
   assert.equal(loadConfig({}).GEMINI_HEDGE_MS, 50_000);
   assert.equal(loadConfig({ GEMINI_HEDGE_MS: "0" }).GEMINI_HEDGE_MS, 0);
+});
+
+test("HedgedGenerator: the backup call goes to the fallback model; createGenerator defaults it to gemini-3.7-flash", async () => {
+  const { HedgedGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = scripted([{ ms: 1, fail: "429 Resource exhausted" }, { ms: 1, text: "fallback" }]);
+  const logs: string[] = [];
+  const res = await new HedgedGenerator(gen, 5000, "gemini-3.7-flash", (l) => logs.push(l)).generate({ prompt: "p", model: "gemini-3.8-flash", label: "shortlist" });
+  assert.equal(res.text, "fallback");
+  assert.equal(calls[0].model, "gemini-3.8-flash");
+  assert.equal(calls[1].model, "gemini-3.7-flash");
+  assert.equal(calls[1].label, "shortlist (backup)");
+  assert.match(logs[0], /shortlist: backup call on gemini-3\.7-flash at low thinking after \d+ms, primary failed/);
+  assert.equal(loadConfig({}).GEMINI_FALLBACK_MODEL, "gemini-3.7-flash");
+  assert.equal(loadConfig({ GEMINI_FALLBACK_MODEL: "x" }).GEMINI_FALLBACK_MODEL, "x");
 });
