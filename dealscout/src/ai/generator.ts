@@ -132,8 +132,7 @@ export class GenAIGenerator implements TextGenerator {
  * 120 s while sibling calls answered in 8-72 s). If a call hasn't answered after hedgeAfterMs, or fails before then,
  * one backup call starts at low thinking; the first answer wins and the other is cancelled.
  * The backup goes to fallbackModel when set: Vertex capacity is per model, and on Oct 15 gemini-3.8-flash returned
- * 429 "Resource exhausted" and ran ~5x slower than other Gemini 3 models. A call already on fallbackModel backs up
- * on the default model instead.
+ * 429 "Resource exhausted" and ran ~5x slower than other Gemini 3 models.
  */
 export class HedgedGenerator implements TextGenerator {
   readonly model: string;
@@ -196,9 +195,7 @@ export class HedgedGenerator implements TextGenerator {
         if (hedged || done) return;
         hedged = true;
         clearTimeout(timer);
-        // A backup on the model that just stalled would share its capacity; then fall back to the default model.
-        const own = req.model ?? this.model;
-        const model = this.fallbackModel && this.fallbackModel !== own ? this.fallbackModel : this.model;
+        const model = this.fallbackModel ?? req.model ?? this.model;
         this.log(`gemini: ${what}: backup call on ${model} at low thinking after ${Date.now() - started}ms, ${why}`);
         run({ ...req, model, thinkingLevel: "low", signal: linked(backup), label: `${what} (backup)` }, "backup");
       };
