@@ -1,11 +1,11 @@
 import { useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Activity, ArrowRight, ArrowUpRight, Check, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, Filter, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 
 const EXAMPLES = [
-  "USB audio interface, 2 inputs, under ₹15k",
-  "Digital piano with weighted keys under ₹40,000",
-  "MIDI keyboard 49 keys under ₹10k",
+  "Wireless earbuds with ANC for my metro commute, under ₹10k",
+  "Robot vacuum with mopping and LiDAR for a 2BHK, under ₹25,000",
+  "Laptop for college coding, 16GB RAM, under ₹60k",
 ];
 
 interface Props {
@@ -15,8 +15,8 @@ interface Props {
   onSubmit: (request: string) => void;
 }
 
-/** Static illustration of the product's core idea. It is a sample, and says so. */
-function SamplePriceCheck() {
+/** Static illustration of a search result. It is a sample, and says so. */
+function SampleResult() {
   return (
     <div className="relative mx-auto w-full max-w-md" aria-hidden>
       <div className="absolute -left-4 top-6 z-10 flex -rotate-2 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-[0_8px_24px_rgba(34,40,62,0.08)]">
@@ -24,42 +24,31 @@ function SamplePriceCheck() {
           <Check className="h-4 w-4" />
         </span>
         <span className="text-xs">
-          <b className="block text-slate-900">Price checked</b>
-          <span className="text-slate-500">Sample history reviewed</span>
+          <b className="block text-slate-900">Listings verified</b>
+          <span className="text-slate-500">3 look-alikes skipped</span>
         </span>
       </div>
 
       <div className="mt-14 rotate-[1.5deg] rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(60,62,140,0.12)]">
         <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
-          <span>Price check</span>
-          <span className="flex items-center gap-1.5 text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" /> Demo
-          </span>
+          <span>Best value pick</span>
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 normal-case tracking-normal">Within budget</span>
         </div>
-        <p className="mt-4 text-sm font-semibold text-slate-800">Focusrite Scarlett 2i2</p>
+        <p className="mt-4 text-sm font-semibold text-slate-800">Sony WF-C700N</p>
         <p className="mt-1 flex items-baseline gap-2">
-          <span className="tabular text-3xl font-extrabold tracking-tight">₹11,999</span>
-          <span className="tabular text-sm text-slate-400 line-through">₹17,999</span>
+          <span className="tabular text-3xl font-extrabold tracking-tight">₹7,990</span>
+          <span className="text-sm text-slate-500">at Myntra</span>
         </p>
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-rose-100 bg-rose-50/70 px-3.5 py-2.5 text-sm">
-          <span className="flex items-center gap-1.5 text-rose-700">
-            33% claimed <ArrowUpRight className="h-3.5 w-3.5 rotate-90" />
-          </span>
-          <b className="text-slate-900">12% real</b>
-        </div>
-        <svg viewBox="0 0 300 90" className="mt-4 w-full" role="presentation">
-          <defs>
-            <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#6365d8" stopOpacity="0.22" />
-              <stop offset="1" stopColor="#6365d8" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <line x1="0" x2="300" y1="12" y2="12" stroke="#c85463" strokeDasharray="4 4" strokeWidth="1.25" />
-          <text x="296" y="8" textAnchor="end" fontSize="8" fill="#c85463">store's "was" price</text>
-          <path d="M0 52 C 25 48, 45 56, 75 54 S 130 66, 160 62 S 220 72, 250 68 S 285 70, 300 66 L300 90 L0 90 Z" fill="url(#hero-fill)" />
-          <path d="M0 52 C 25 48, 45 56, 75 54 S 130 66, 160 62 S 220 72, 250 68 S 285 70, 300 66" fill="none" stroke="#6365d8" strokeWidth="2" />
-        </svg>
-        <p className="mt-1 text-[11px] text-slate-400">60 days of price history</p>
+        <p className="mt-0.5 text-xs text-slate-500">Also at TechCommerce.in ₹8,271 · LowestRate Shopping ₹8,799</p>
+        <ul className="mt-4 flex flex-wrap gap-1.5 text-xs font-medium">
+          <li className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+            <Check className="h-3.5 w-3.5" /> active noise cancellation
+          </li>
+          <li className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+            <Check className="h-3.5 w-3.5" /> true wireless
+          </li>
+        </ul>
+        <p className="mt-3 text-xs text-slate-500">"Commuters love the fit and the ANC on trains; the case holds only one extra charge."</p>
       </div>
 
       <div className="absolute -bottom-5 right-0 z-10 flex rotate-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-[0_8px_24px_rgba(34,40,62,0.08)]">
@@ -67,11 +56,11 @@ function SamplePriceCheck() {
           <ShieldCheck className="h-4 w-4" />
         </span>
         <span className="text-xs">
-          <b className="block text-slate-900">See the full picture</b>
-          <span className="text-slate-500">Before you click "buy"</span>
+          <b className="block text-slate-900">Real prices, checked live</b>
+          <span className="text-slate-500">From Indian stores on Google Shopping</span>
         </span>
       </div>
-      <p className="mt-10 text-xs text-slate-400">Sample card. Synthetic demo data.</p>
+      <p className="mt-10 text-xs text-slate-400">Sample card from a real search on Oct 15, 2026.</p>
     </div>
   );
 }
@@ -106,14 +95,14 @@ export function DescribeStep({ initial, loading, error, onSubmit }: Props) {
             <span className="text-indigo-600">not the product.</span>
           </h1>
           <p className="mt-5 max-w-lg text-lg leading-relaxed text-slate-500">
-            Tell us what you're looking for and what you can spend. We'll find matches across stores and help you spot a deal that's actually worth it.
+            Tell us what you're looking for and what you can spend. We research the right models, check live prices at Indian stores, and show you what's actually worth it.
           </p>
           <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[15px] text-slate-600">
             <li className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-emerald-700" aria-hidden /> Honest price history
+              <ShieldCheck className="h-5 w-5 text-emerald-700" aria-hidden /> Real prices, never AI-made
             </li>
             <li className="flex items-center gap-2">
-              <Activity className="h-5 w-5 text-emerald-700" aria-hidden /> No retailer bias
+              <Filter className="h-5 w-5 text-emerald-700" aria-hidden /> Accessories and look-alikes filtered out
             </li>
           </ul>
 
@@ -134,7 +123,7 @@ export function DescribeStep({ initial, loading, error, onSubmit }: Props) {
               onKeyDown={onKey}
               rows={3}
               maxLength={500}
-              placeholder="e.g. 2-input USB audio interface with phantom power for home recording, under ₹15,000"
+              placeholder="e.g. Wireless earbuds with noise cancellation for my daily metro commute, good battery, under ₹10,000"
               className="mt-3 w-full resize-none border-0 bg-transparent p-0 text-lg text-slate-900 outline-none placeholder:text-slate-400"
             />
             <div className="border-t border-slate-100 pt-1 text-right text-xs text-slate-400 tabular">{text.length}/500</div>
@@ -176,7 +165,7 @@ export function DescribeStep({ initial, loading, error, onSubmit }: Props) {
           </div>
         </div>
 
-        <SamplePriceCheck />
+        <SampleResult />
       </section>
 
       <div className="mt-16 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-500">
