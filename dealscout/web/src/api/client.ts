@@ -57,7 +57,8 @@ export interface SpecResponse {
   warnings: string[];
 }
 
-export const health = (): Promise<{ ok: boolean; version: string }> => (USE_MOCK ? mock.health() : apiFetch("/healthz"));
+// Not /healthz: Cloud Run's front end reserves it and never passes it to the app.
+export const health = (): Promise<{ ok: boolean; version: string }> => (USE_MOCK ? mock.health() : apiFetch("/api/health"));
 
 export const getSpec = (request: string): Promise<SpecResponse> =>
   USE_MOCK ? mock.getSpec(request) : post("/api/spec", { request });

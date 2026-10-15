@@ -1,4 +1,4 @@
-# Run both dev servers in containers:  docker compose up --build
+# Run the API and the built web app in containers:  docker compose up --build
 # Then open http://localhost:5173
 services:
   api:
@@ -21,6 +21,6 @@ services:
       - "5173:5173"
     environment:
       API_URL: http://api:8080
-      VITE_USE_MOCK: "false"
+      PORT: "5173" # the built app is served by `vite preview` on $PORT
     depends_on:
       - api
