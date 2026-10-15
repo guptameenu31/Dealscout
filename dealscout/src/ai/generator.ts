@@ -20,6 +20,8 @@ export interface GenerateRequest {
   /** Model for this call only; omitted = the generator's default model. */
   model?: string;
   signal?: AbortSignal;
+  /** Names the pipeline step in the per-call log line (e.g. "details: Sony WF-C700N"). */
+  label?: string;
 }
 
 export type ThinkingDepth = "low" | "medium" | "high";
@@ -65,16 +67,43 @@ export class GenAIGenerator implements TextGenerator {
   readonly model: string;
   readonly backend: "vertex-ai" | "gemini-api";
   private ai: GoogleGenAI;
+  private log: (line: string) => void;
 
-  constructor(ai: GoogleGenAI, model: string, backend: "vertex-ai" | "gemini-api") {
+  constructor(ai: GoogleGenAI, model: string, backend: "vertex-ai" | "gemini-api", log: (line: string) => void = console.log) {
     this.ai = ai;
     this.model = model;
     this.backend = backend;
+    this.log = log;
   }
 
+  /**
+   * One log line per call: duration, search queries run and token counts, to tell slow search rounds,
+   * long thinking and slow serving apart. Never logs prompts or answers.
+   */
   async generate(req: GenerateRequest): Promise<GenerateResult> {
-    const res = await this.ai.models.generateContent({
-      model: req.model ?? this.model,
+    const model = req.model ?? this.model;
+    const what = `${req.label ?? "call"} [${model}, ${req.thinkingLevel ?? "default"} thinking]`;
+    const started = Date.now();
+    let res: Awaited<ReturnType<GoogleGenAI["models"]["generateContent"]>>;
+    try {
+      res = await this.callSdk(req, model);
+    } catch (err) {
+      this.log(`gemini: ${what} failed after ${Date.now() - started}ms: ${String((err as Error)?.message ?? err).slice(0, 200)}`);
+      throw err;
+    }
+    const u = res.usageMetadata;
+    const searches = res.candidates?.[0]?.groundingMetadata?.webSearchQueries?.length ?? 0;
+    this.log(
+      `gemini: ${what} ${Date.now() - started}ms, ${searches} searches, ` +
+        `tokens: ${u?.thoughtsTokenCount ?? 0} thinking, ${u?.candidatesTokenCount ?? 0} output, ` +
+        `${u?.promptTokenCount ?? 0} prompt, ${u?.toolUsePromptTokenCount ?? 0} search results`,
+    );
+    return this.parse(res);
+  }
+
+  private callSdk(req: GenerateRequest, model: string) {
+    return this.ai.models.generateContent({
+      model,
       contents: req.prompt,
       config: {
         abortSignal: req.signal,
@@ -84,6 +113,9 @@ export class GenAIGenerator implements TextGenerator {
         ...(req.jsonSchema ? { responseMimeType: "application/json", responseJsonSchema: req.jsonSchema } : {}),
       },
     });
+  }
+
+  private parse(res: Awaited<ReturnType<GenAIGenerator["callSdk"]>>): GenerateResult {
     const text = res.text ?? "";
     if (!text) throw new Error("Gemini returned an empty response");
     const chunks = res.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
@@ -121,7 +153,7 @@ export class HedgedGenerator implements TextGenerator {
     const linked = (c: AbortController) => (outer ? AbortSignal.any([outer, c.signal]) : c.signal);
     const primary = new AbortController();
     const backup = new AbortController();
-    const model = req.model ?? this.model;
+    const what = req.label ?? req.model ?? this.model;
     const started = Date.now();
 
     return new Promise((resolve, reject) => {
@@ -139,7 +171,7 @@ export class HedgedGenerator implements TextGenerator {
             done = true;
             clearTimeout(timer);
             (which === "primary" ? backup : primary).abort();
-            if (hedged) this.log(`gemini: ${which} answered after ${Date.now() - started}ms (${model})`);
+            if (hedged) this.log(`gemini: ${what}: ${which} answered first, after ${Date.now() - started}ms`);
             resolve(res);
           },
           (err) => {
@@ -159,8 +191,8 @@ export class HedgedGenerator implements TextGenerator {
         if (hedged || done) return;
         hedged = true;
         clearTimeout(timer);
-        this.log(`gemini: backup call at low thinking after ${Date.now() - started}ms, ${why} (${model})`);
-        run({ ...req, thinkingLevel: "low", signal: linked(backup) }, "backup");
+        this.log(`gemini: ${what}: backup call at low thinking after ${Date.now() - started}ms, ${why}`);
+        run({ ...req, thinkingLevel: "low", signal: linked(backup), label: `${what} (backup)` }, "backup");
       };
 
       timer = setTimeout(() => startBackup("no answer yet"), this.hedgeAfterMs);

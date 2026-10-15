@@ -77,6 +77,7 @@ export async function buildWatchSpec(query: string, generator: TextGenerator | n
   try {
     const res = await generator.generate({
       ...step,
+      label: "spec",
       jsonSchema: SPEC_SCHEMA,
       prompt: `Turn this shopping request into a watch spec for Indian retailers. Budget is in INR. Keep must-haves to hard requirements only, phrased as short feature names (e.g. "2 inputs", "48V phantom power"). Only set needsClarification if the request is too vague to search for.
 

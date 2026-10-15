@@ -191,6 +191,29 @@ test("GenAIGenerator sends search/schema config to the SDK and reads text + grou
   await assert.rejects(() => empty.generate({ prompt: "p" }), /empty response/);
 });
 
+test("GenAIGenerator logs one line per call: step, duration, searches and tokens, or the failure", async () => {
+  const { GenAIGenerator } = await import("../src/ai/generator.ts");
+  const logs: string[] = [];
+  const sdk = {
+    models: {
+      generateContent: async (params: any) => {
+        if (params.contents === "fail") throw new Error("deadline exceeded");
+        return {
+          text: "{}",
+          usageMetadata: { thoughtsTokenCount: 900, candidatesTokenCount: 300, promptTokenCount: 200, toolUsePromptTokenCount: 5000 },
+          candidates: [{ groundingMetadata: { webSearchQueries: ["a", "b", "c"] } }],
+        };
+      },
+    },
+  };
+  const g = new GenAIGenerator(sdk as any, "m", "vertex-ai", (l) => logs.push(l));
+  await g.generate({ prompt: "secret prompt", label: "details: X", thinkingLevel: "medium" });
+  assert.match(logs[0], /^gemini: details: X \[m, medium thinking\] \d+ms, 3 searches, tokens: 900 thinking, 300 output, 200 prompt, 5000 search results$/);
+  assert.doesNotMatch(logs[0], /secret/);
+  await assert.rejects(g.generate({ prompt: "fail" }), /deadline/);
+  assert.match(logs[1], /^gemini: call \[m, default thinking\] failed after \d+ms: deadline exceeded$/);
+});
+
 // ---------- Hedged calls ----------
 
 /** Fake generator: each call follows the next script step (answer or fail after ms), and honours abort. */

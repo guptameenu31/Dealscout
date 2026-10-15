@@ -86,6 +86,7 @@ export class GeminiSource implements PriceSource {
     const avoid = spec.excluded.length ? `Avoid products with: ${spec.excluded.join(", ")}.` : "";
 
     const grounded = await generator.generate({
+      label: "v1 search",
       googleSearch: true,
       thinkingLevel: "low", // default thinking ran ~2x the search rounds (80s+ vs ~35-45s)
       signal,
@@ -102,6 +103,7 @@ Set met to "yes" only if the text states it, "no" if the text contradicts it, an
       : "Leave requirementChecks empty.";
 
     const extracted = await generator.generate({
+      label: "v1 extract",
       jsonSchema: PRODUCT_SCHEMA,
       thinkingLevel: "low",
       signal,
