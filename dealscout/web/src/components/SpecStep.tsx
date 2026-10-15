@@ -1,15 +1,9 @@
 import { useState } from "react";
-import { ChevronDown, HelpCircle, Loader2, Search, Sparkles, Wand2 } from "lucide-react";
+import { HelpCircle, Loader2, Search, Sparkles, Wand2 } from "lucide-react";
 import type { SpecResponse } from "../api/client";
-import type { ScoutMode, WatchSpec } from "../api/types";
+import type { WatchSpec } from "../api/types";
 import { ChipList } from "./ChipList";
 import { PageHeading } from "./PageHeading";
-
-const MODES: { id: ScoutMode; label: string }[] = [
-  { id: "auto", label: "Auto (recommended)" },
-  { id: "live", label: "Live only" },
-  { id: "seeded", label: "Demo data" },
-];
 
 interface Props {
   response: SpecResponse;
@@ -17,13 +11,12 @@ interface Props {
   clarifying: boolean;
   error: string | null;
   onClarify: (answer: string) => void;
-  onFind: (spec: WatchSpec, mode: ScoutMode) => void;
+  onFind: (spec: WatchSpec) => void;
   onReset: () => void;
 }
 
 export function SpecStep({ response, loading, clarifying, error, onClarify, onFind, onReset }: Props) {
   const [spec, setSpec] = useState<WatchSpec>(response.spec);
-  const [mode, setMode] = useState<ScoutMode>("auto");
   const [answer, setAnswer] = useState("");
   const gemini = response.via === "gemini";
   const set = <K extends keyof WatchSpec>(k: K, v: WatchSpec[K]) => setSpec((s) => ({ ...s, [k]: v }));
@@ -99,7 +92,7 @@ export function SpecStep({ response, loading, clarifying, error, onClarify, onFi
         </div>
 
         <ChipList label="Must-haves" hint="Products without these are left out." kind="must" values={spec.mustHaves} onChange={(v) => set("mustHaves", v)} />
-        <ChipList label="Nice-to-haves" hint="Used to rank, never to exclude." kind="nice" values={spec.niceToHaves} onChange={(v) => set("niceToHaves", v)} />
+        <ChipList label="Nice-to-haves" hint="Shapes which models are picked and which specs are reported." kind="nice" values={spec.niceToHaves} onChange={(v) => set("niceToHaves", v)} />
         <ChipList label="Excluded" hint="Products with these are left out." kind="excluded" values={spec.excluded} onChange={(v) => set("excluded", v)} />
 
         {response.warnings.length > 0 && (
@@ -110,22 +103,6 @@ export function SpecStep({ response, loading, clarifying, error, onClarify, onFi
           </ul>
         )}
 
-        <details className="group text-sm">
-          <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-slate-600 focus-visible:outline-2 focus-visible:outline-indigo-600">
-            Advanced <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
-          </summary>
-          <fieldset className="mt-3">
-            <legend className="mb-2 text-xs font-medium text-slate-500">Data source</legend>
-            <div className="inline-flex rounded-xl bg-slate-100 p-1">
-              {MODES.map((m) => (
-                <label key={m.id} className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-indigo-600 ${mode === m.id ? "bg-white font-medium shadow-sm" : "text-slate-600"}`}>
-                  <input type="radio" name="mode" value={m.id} checked={mode === m.id} onChange={() => setMode(m.id)} className="sr-only" />
-                  {m.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        </details>
       </div>
 
       {error && (
@@ -135,7 +112,7 @@ export function SpecStep({ response, loading, clarifying, error, onClarify, onFi
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => onFind(spec, mode)} disabled={!valid || loading} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+        <button type="button" onClick={() => onFind(spec)} disabled={!valid || loading} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
           <Search className="h-5 w-5" aria-hidden /> Find deals
         </button>
         <button type="button" onClick={onReset} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-600">

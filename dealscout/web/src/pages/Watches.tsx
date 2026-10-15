@@ -1,135 +1,124 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, ChevronLeft, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { BellRing, CalendarClock, Mail, Pause, RefreshCw, Save, TrendingDown } from "lucide-react";
 import { Link } from "react-router-dom";
-import { checkWatch, deleteWatch, listWatches } from "../api/client";
-import { ApiClientError } from "../api/errors";
-import type { Watch } from "../api/types";
-import { ErrorState } from "../components/ErrorState";
 import { PageHeading } from "../components/PageHeading";
-import { Results } from "../components/Results";
-import { useToast } from "../components/Toast";
-import { inr, relativeTime } from "../lib/format";
 
-function Empty() {
+/**
+ * Watches are planned for v1.2 (Firestore + Cloud Scheduler + email). Until then this page previews the feature with a
+ * clearly labelled sample, and makes no API calls.
+ */
+
+const STEPS = [
+  {
+    icon: Save,
+    title: "Save a need",
+    body: "From your search results, watch the need (not one product) with your email address.",
+  },
+  {
+    icon: CalendarClock,
+    title: "Scheduled price checks",
+    body: "DealScout re-checks live Google Shopping prices for your shortlisted models every day and stores each price it sees, building a real price history.",
+  },
+  {
+    icon: Mail,
+    title: "Email when it's time to buy",
+    body: "You get an email when a pick drops to its lowest since you started watching, or comes within your budget.",
+  },
+];
+
+const SAMPLE_ROWS = [
+  { name: "Sony WF-C700N", price: "₹7,990", note: "Lowest since you started watching", drop: "↓ ₹800 in 9 days" },
+  { name: "OnePlus Buds 3", price: "₹4,249", note: "Steady for 2 weeks", drop: null },
+  { name: "OnePlus Buds Pro 3", price: "₹10,299", note: "₹299 over budget", drop: "↓ ₹700 in 9 days" },
+];
+
+function SampleWatch() {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-      <Bell className="mx-auto h-10 w-10 text-slate-400" aria-hidden />
-      <p className="mt-3 font-medium">No watches yet</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-        Describe a need and tap "Watch this need". DealScout will check prices daily and email you.
-      </p>
-      <Link to="/" className="mt-4 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-        Start a search
-      </Link>
+    <div className="relative rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_6px_24px_rgba(80,70,160,0.06)]" aria-label="Sample watch (preview, not real data)">
+      <span className="absolute -top-3 right-4 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white">Preview · sample data</span>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-base font-semibold">Truly wireless earbuds</h3>
+          <p className="tabular text-sm text-slate-500">Up to ₹10,000 · you@example.com</p>
+        </div>
+        <p className="flex items-center gap-1.5 text-sm text-slate-500">
+          <CalendarClock className="h-4 w-4" aria-hidden /> Checked daily · last check 2 hours ago
+        </p>
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-1.5">
+        {["active noise cancellation", "true wireless"].map((m) => (
+          <li key={m} className="rounded-full bg-indigo-600 px-2.5 py-1 text-xs text-white">
+            {m}
+          </li>
+        ))}
+      </ul>
+      <ul className="mt-4 divide-y divide-slate-100 rounded-xl ring-1 ring-slate-200">
+        {SAMPLE_ROWS.map((r) => (
+          <li key={r.name} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-2.5 text-sm">
+            <span className="min-w-0 flex-1">
+              <span className="font-medium">{r.name}</span>
+              <span className="block text-xs text-slate-500">{r.note}</span>
+            </span>
+            {r.drop && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                <TrendingDown className="h-3.5 w-3.5" aria-hidden /> {r.drop}
+              </span>
+            )}
+            <span className="tabular font-semibold">{r.price}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 rounded-xl bg-slate-50 p-3.5 text-sm">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <Mail className="h-3.5 w-3.5" aria-hidden /> Email you'd receive
+        </p>
+        <p className="mt-1.5 font-medium text-slate-800">DealScout: Sony WF-C700N is at its lowest price since you started watching</p>
+        <p className="text-slate-500">₹7,990 at Myntra (was ₹8,790 when you started watching). 2 other picks are still within your budget.</p>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white opacity-50">
+          <RefreshCw className="h-4 w-4" aria-hidden /> Check now
+        </button>
+        <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-medium ring-1 ring-inset ring-slate-300 opacity-50">
+          <Pause className="h-4 w-4" aria-hidden /> Pause
+        </button>
+      </div>
     </div>
   );
 }
 
-function summary(w: Watch): string {
-  const r = w.lastResult;
-  if (!r) return "Not checked yet";
-  const buy = r.items.filter((i) => i.verdict.label === "buy_now").length;
-  const inflated = r.items.filter((i) => i.verdict.fakeDiscount).length;
-  return `${buy} Buy now · ${inflated} inflated discount${inflated === 1 ? "" : "s"}`;
-}
-
-function WatchCard({ watch, onView }: { watch: Watch; onView: () => void }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const [confirming, setConfirming] = useState(false);
-
-  const check = useMutation({
-    mutationFn: () => checkWatch(watch.id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["watches"] });
-      toast("Checked just now");
-    },
-  });
-  const del = useMutation({
-    mutationFn: () => deleteWatch(watch.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watches"] }),
-  });
-  const { spec } = watch;
-
-  return (
-    <li className="space-y-3 rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_6px_24px_rgba(80,70,160,0.06)]">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="text-base font-semibold capitalize">{spec.category}</h3>
-          <p className="tabular text-sm text-slate-500">Up to {inr(spec.budget)} · {watch.email}</p>
-        </div>
-        <p className="text-sm text-slate-500">Last checked {watch.lastCheckedAt ? relativeTime(watch.lastCheckedAt) : "never"}</p>
-      </div>
-      {spec.mustHaves.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5">
-          {spec.mustHaves.map((m) => (
-            <li key={m} className="rounded-full bg-indigo-600 px-2.5 py-1 text-xs text-white">
-              {m}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="text-sm font-medium text-slate-700">{summary(watch)}</p>
-      {(check.error || del.error) && <p role="alert" className="text-sm text-rose-700">{(check.error ?? del.error)!.message}</p>}
-      <div className="flex flex-wrap items-center gap-2 pt-1">
-        <button type="button" onClick={() => check.mutate()} disabled={check.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-          {check.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Check now
-        </button>
-        <button type="button" onClick={onView} disabled={!watch.lastResult} className="rounded-lg bg-white px-3.5 py-2 text-sm font-medium ring-1 ring-inset ring-slate-300 hover:bg-slate-50 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-          View results
-        </button>
-        {confirming ? (
-          <span className="ml-auto flex items-center gap-2 text-sm">
-            Are you sure?
-            <button type="button" onClick={() => del.mutate()} disabled={del.isPending} className="rounded-lg bg-rose-600 px-3 py-1.5 font-medium text-white hover:bg-rose-700 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600">
-              {del.isPending ? "Deleting…" : "Yes, delete"}
-            </button>
-            <button type="button" onClick={() => setConfirming(false)} className="rounded-lg px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100">
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button type="button" onClick={() => setConfirming(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600">
-            <Trash2 className="h-4 w-4" aria-hidden /> Delete
-          </button>
-        )}
-      </div>
-    </li>
-  );
-}
-
 export default function Watches() {
-  const q = useQuery({ queryKey: ["watches"], queryFn: listWatches, retry: false });
-  const [viewing, setViewing] = useState<Watch | null>(null);
-
-  if (viewing?.lastResult) {
-    return (
-      <div className="space-y-5">
-        <button type="button" onClick={() => setViewing(null)} className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-          <ChevronLeft className="h-4 w-4" aria-hidden /> All watches
-        </button>
-        <PageHeading eyebrow="Saved watch" title={viewing.spec.category} />
-        <Results result={viewing.lastResult} hideActions />
-      </div>
-    );
-  }
-
-  const notReady = q.error instanceof ApiClientError && q.error.code === "NOT_IMPLEMENTED";
-
   return (
-    <div className="space-y-6">
-      <PageHeading eyebrow="Your price radar" title="My watches" subtitle="Your needs, keeping an eye on the right deal." />
-      {q.isPending && <div className="h-32 animate-pulse rounded-2xl bg-white ring-1 ring-slate-200" aria-label="Loading watches" />}
-      {q.isError && !notReady && <ErrorState message={q.error.message} onRetry={() => q.refetch()} />}
-      {(notReady || (q.isSuccess && q.data.watches.length === 0)) && <Empty />}
-      {q.isSuccess && q.data.watches.length > 0 && (
-        <ul className="grid gap-4 lg:grid-cols-2">
-          {q.data.watches.map((w) => (
-            <WatchCard key={w.id} watch={w} onView={() => setViewing(w)} />
-          ))}
-        </ul>
-      )}
+    <div className="space-y-8">
+      <PageHeading
+        eyebrow="Coming in v1.2"
+        title="My watches"
+        subtitle="Save a need once. DealScout keeps checking prices for you and emails you when it's time to buy."
+      />
+
+      <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+        <BellRing className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="flex-1">Watches aren't available yet. Below is a preview of how they'll work.</span>
+        <Link to="/" className="font-semibold text-indigo-700 hover:text-indigo-800 focus-visible:outline-2 focus-visible:outline-indigo-600">
+          Start a search
+        </Link>
+      </div>
+
+      <ol className="grid gap-4 md:grid-cols-3">
+        {STEPS.map((s, i) => (
+          <li key={s.title} className="rounded-2xl border border-slate-200 bg-white p-5">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-100 text-indigo-600" aria-hidden>
+              <s.icon className="h-5 w-5" />
+            </span>
+            <h2 className="mt-3 font-semibold">
+              <span className="text-slate-400">0{i + 1} </span>
+              {s.title}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">{s.body}</p>
+          </li>
+        ))}
+      </ol>
+
+      <SampleWatch />
     </div>
   );
 }

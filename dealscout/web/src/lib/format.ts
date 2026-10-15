@@ -1,3 +1,5 @@
+import type { ApiOffer } from "../api/types";
+
 const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 
 export const inr = (n: number) => inrFmt.format(n);
@@ -31,3 +33,9 @@ export function absoluteDate(iso: string): string {
 export function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
+
+/**
+ * Both link types open Google Shopping, not the store's own page: "shopping" is Google's offer page for this listing,
+ * "search" is a Google Shopping search for the title (Serper gave no link).
+ */
+export const offerLinkLabel = (o: ApiOffer) => (o.linkType === "search" ? "Find on Google Shopping" : `View ${o.store} offer`);

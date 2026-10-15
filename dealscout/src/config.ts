@@ -32,7 +32,7 @@ const EnvSchema = z.object({
   /** Where the JSON price history and result cache are written (local dev; Firestore later). */
   DATA_DIR: env(z.string().default("data")),
   /** POST requests per minute per client IP on /api. 0 disables the limit. */
-  RATE_LIMIT_PER_MIN: env(z.coerce.number().int().nonnegative().default(30)),
+  RATE_LIMIT_PER_MIN: env(z.coerce.number().int().nonnegative().default(60)), // one search is ~11 POSTs
   /** Built React app to serve at / (created by `npm run build` in web/). */
   WEB_DIST: env(z.string().default("web/dist")),
   /** Set automatically by Cloud Run; shown by /healthz. */

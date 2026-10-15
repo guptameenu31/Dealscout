@@ -54,9 +54,9 @@ export function Layout() {
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-start justify-between gap-3 px-4 py-6 text-[13px] text-slate-500 sm:px-8">
           <p className="max-w-xl">
-            Prices from public store listings; verify on the retailer's site before buying.
+            Prices from Google Shopping listings in India; picks researched by Gemini with Google Search.
             <br />
-            Verdicts are based on observed price history, not predictions.
+            Verify on the retailer's site before buying.
           </p>
           <p className="flex items-center gap-2" role="status">
             <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden /> API {state}
