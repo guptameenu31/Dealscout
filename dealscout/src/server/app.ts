@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import express, { type Express } from "express";
-import { createGenerator, type TextGenerator } from "../ai/generator.ts";
+import { createGenerator, stepModels, type TextGenerator } from "../ai/generator.ts";
 import type { Config } from "../config.ts";
 import { HistoryStore } from "../historyStore.ts";
 import { GeminiSource } from "../sources/gemini.ts";
@@ -53,7 +53,7 @@ export function createApp(deps: AppDeps): Express {
   const api = express.Router();
   api.use(express.json({ limit: "64kb" }));
   api.use(rateLimit(config.RATE_LIMIT_PER_MIN));
-  api.use(specRouter(deps.buildSpec ?? ((q: string) => buildWatchSpec(q, generator))));
+  api.use(specRouter(deps.buildSpec ?? ((q: string) => buildWatchSpec(q, generator, stepModels(config).spec))));
   api.use(
     scoutRouter({
       liveSource,

@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { createGenerator } from "./ai/generator.ts";
+import { createGenerator, stepModels } from "./ai/generator.ts";
 import { loadConfig } from "./config.ts";
 import { renderHtml, renderText } from "./digest.ts";
 import { HistoryStore } from "./historyStore.ts";
@@ -19,8 +19,9 @@ const query =
   args.filter((a) => !a.startsWith("--")).join(" ") ||
   "I need a 2-input USB audio interface with phantom power for home recording, under ₹15k";
 
-const generator = createGenerator(loadConfig());
-const { spec, via } = await buildWatchSpec(query, generator);
+const config = loadConfig();
+const generator = createGenerator(config);
+const { spec, via } = await buildWatchSpec(query, generator, stepModels(config).spec);
 console.log(`Watch spec (via ${via}):`);
 console.log(JSON.stringify(spec, null, 2), "\n");
 
