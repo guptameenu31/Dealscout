@@ -31,10 +31,11 @@ export interface StepModel {
 }
 
 /** Per-step models (GEMINI_*_MODEL, each defaulting to GEMINI_MODEL). Thinking depths per plan-v1.1 §3. */
-export function stepModels(config: Config): { spec: StepModel; research: StepModel; advisor: StepModel } {
+export function stepModels(config: Config): { spec: StepModel; research: StepModel; validator: StepModel; advisor: StepModel } {
   return {
     spec: { model: config.GEMINI_SPEC_MODEL ?? config.GEMINI_MODEL, thinkingLevel: "low" },
     research: { model: config.GEMINI_RESEARCH_MODEL ?? config.GEMINI_MODEL, thinkingLevel: "medium" },
+    validator: { model: config.GEMINI_VALIDATOR_MODEL ?? config.GEMINI_MODEL, thinkingLevel: "low" },
     advisor: { model: config.GEMINI_ADVISOR_MODEL ?? config.GEMINI_MODEL, thinkingLevel: "low" },
   };
 }

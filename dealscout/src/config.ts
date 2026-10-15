@@ -22,8 +22,11 @@ const EnvSchema = z.object({
   GEMINI_SPEC_MODEL: env(z.string().trim().optional()),
   GEMINI_RESEARCH_MODEL: env(z.string().trim().optional()),
   GEMINI_ADVISOR_MODEL: env(z.string().trim().optional()),
+  GEMINI_VALIDATOR_MODEL: env(z.string().trim().optional()),
   /** Serper.dev key for Google Shopping prices (server-side only). Unset = v1 Gemini-only path. */
   SERPER_API_KEY: env(z.string().trim().optional()),
+  /** Serper results per researched model passed to the AI validator (n models x k listings). */
+  SERPER_TOP_K: env(z.coerce.number().int().min(1).max(20).default(5)),
   /** Max time for one live discovery before falling back. */
   LIVE_TIMEOUT_MS: env(z.coerce.number().int().positive().default(120_000)),
   /** Where the JSON price history and result cache are written (local dev; Firestore later). */

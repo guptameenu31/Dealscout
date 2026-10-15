@@ -2,10 +2,12 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import express, { type Express } from "express";
 import { createGenerator, stepModels, type TextGenerator } from "../ai/generator.ts";
+import { ResearchCache } from "../ai/research.ts";
 import type { Config } from "../config.ts";
 import { HistoryStore } from "../historyStore.ts";
 import { GeminiSource } from "../sources/gemini.ts";
 import { MockSource } from "../sources/mock.ts";
+import { SerperClient } from "../sources/serper.ts";
 import { buildWatchSpec, type BuiltSpec } from "../spec.ts";
 import type { PriceSource } from "../types.ts";
 import { apiNotFound, errorHandler } from "./middleware/errors.ts";
@@ -14,6 +16,7 @@ import { requestLog } from "./middleware/requestLog.ts";
 import { ResultCache } from "./resultCache.ts";
 import { healthRouter } from "./routes/health.ts";
 import { notImplementedRouter } from "./routes/notImplemented.ts";
+import { pipelineRouter, type PipelineDeps } from "./routes/pipeline.ts";
 import { scoutRouter } from "./routes/scout.ts";
 import { specRouter } from "./routes/spec.ts";
 
@@ -27,6 +30,10 @@ export interface AppDeps {
   liveSource?: ((signal: AbortSignal) => PriceSource) | null;
   seededSource?: () => PriceSource;
   cache?: ResultCache;
+  /** Serper Google Shopping client. Default: from SERPER_API_KEY; null = /api/offers disabled. */
+  serper?: SerperClient | null;
+  /** Overrides for the v1.1 pipeline endpoints (timeouts, research cache). */
+  pipeline?: Partial<Pick<PipelineDeps, "shortlistCache" | "detailsCache" | "researchTimeoutMs" | "validateTimeoutMs">>;
   log?: boolean;
 }
 
@@ -35,6 +42,9 @@ export function createApp(deps: AppDeps): Express {
   const history = new HistoryStore(join(config.DATA_DIR, "history.json"));
   const cache = deps.cache ?? new ResultCache(join(config.DATA_DIR, "cache.json"));
   const generator = deps.generator !== undefined ? deps.generator : createGenerator(config);
+  const serper =
+    deps.serper !== undefined ? deps.serper : config.SERPER_API_KEY ? new SerperClient({ apiKey: config.SERPER_API_KEY }) : null;
+  const steps = stepModels(config);
 
   const liveSource =
     deps.liveSource !== undefined
@@ -51,9 +61,9 @@ export function createApp(deps: AppDeps): Express {
   app.use(healthRouter(config.K_REVISION));
 
   const api = express.Router();
-  api.use(express.json({ limit: "64kb" }));
+  api.use(express.json({ limit: "256kb" })); // /api/validate carries n models x k listings
   api.use(rateLimit(config.RATE_LIMIT_PER_MIN));
-  api.use(specRouter(deps.buildSpec ?? ((q: string) => buildWatchSpec(q, generator, stepModels(config).spec))));
+  api.use(specRouter(deps.buildSpec ?? ((q: string) => buildWatchSpec(q, generator, steps.spec))));
   api.use(
     scoutRouter({
       liveSource,
@@ -61,6 +71,17 @@ export function createApp(deps: AppDeps): Express {
       cache,
       liveTimeoutMs: config.LIVE_TIMEOUT_MS,
       afterLive: () => history.save(),
+    }),
+  );
+  api.use(
+    pipelineRouter({
+      generator,
+      serper,
+      steps,
+      topK: config.SERPER_TOP_K,
+      shortlistCache: new ResearchCache(),
+      detailsCache: new ResearchCache(),
+      ...deps.pipeline,
     }),
   );
   api.use(notImplementedRouter());
