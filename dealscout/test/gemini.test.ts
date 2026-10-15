@@ -131,12 +131,14 @@ test("stepModels: per-step models default to GEMINI_MODEL, env overrides win", (
   assert.deepEqual(def, {
     spec: { model: "base", thinkingLevel: "low" },
     research: { model: "base", thinkingLevel: "medium" },
+    validator: { model: "base", thinkingLevel: "low" },
     advisor: { model: "base", thinkingLevel: "low" },
   });
-  const set = stepModels(loadConfig({ GEMINI_SPEC_MODEL: "s", GEMINI_RESEARCH_MODEL: "r", GEMINI_ADVISOR_MODEL: "a" }));
+  const set = stepModels(loadConfig({ GEMINI_SPEC_MODEL: "s", GEMINI_RESEARCH_MODEL: "r", GEMINI_ADVISOR_MODEL: "a", GEMINI_VALIDATOR_MODEL: "v" }));
   assert.equal(set.spec.model, "s");
   assert.equal(set.research.model, "r");
   assert.equal(set.advisor.model, "a");
+  assert.equal(set.validator.model, "v");
 });
 
 test("buildWatchSpec sends the spec step's model and thinking level", async () => {
