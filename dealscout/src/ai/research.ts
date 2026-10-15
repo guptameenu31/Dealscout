@@ -136,7 +136,9 @@ export async function shortlistModels(spec: WatchSpec, generator: TextGenerator,
     googleSearch: true,
     jsonSchema: SHORTLIST_SCHEMA,
     signal,
+    // Without the no-price-search line it ran a "<model> price India" search per candidate: 13-18 searches vs 7-10 (Oct 15).
     prompt: `Today is ${today()}. Use Google Search to decide which ${spec.category} models a shopper in India should consider. Budget: ${inr(spec.budget)}. ${must} ${nice} ${avoid}
+Use a few broad searches for current buying guides, comparisons and community recommendations, and choose from the models they cover. Do NOT search for prices: live Indian prices are checked separately afterwards, so judge whether a model is within budget or a stretch from typical prices you already know or saw in those results.
 Pick up to ${MAX_IN_BUDGET} models that normally sell in India within the budget, plus up to ${MAX_STRETCH} "stretch" models that sell for up to ${inr(spec.budget * (1 + STRETCH_SHARE))} and are clearly better for this need. Only models currently sold new in India; prefer current models over discontinued ones.
 Name each exactly as Indian retailers list it (brand, model, generation or variant), so the name works as a Google Shopping search. For each, give one short sentence on why it fits. Do NOT give prices or links.
 User request: ${spec.query}`,
