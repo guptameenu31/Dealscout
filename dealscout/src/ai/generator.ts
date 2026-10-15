@@ -96,8 +96,83 @@ export class GenAIGenerator implements TextGenerator {
 }
 
 /**
+ * Hedged Gemini calls. Grounded calls sometimes stall until the 120 s step timeout (Oct 15 logs: 502s at exactly
+ * 120 s while sibling calls answered in 8-72 s). If a call hasn't answered after hedgeAfterMs, or fails before then,
+ * one backup call starts at low thinking; the first answer wins and the other is cancelled.
+ */
+export class HedgedGenerator implements TextGenerator {
+  readonly model: string;
+  readonly backend: "vertex-ai" | "gemini-api";
+  private inner: TextGenerator;
+  private hedgeAfterMs: number;
+  private log: (line: string) => void;
+
+  constructor(inner: TextGenerator, hedgeAfterMs: number, log: (line: string) => void = console.log) {
+    this.inner = inner;
+    this.model = inner.model;
+    this.backend = inner.backend;
+    this.hedgeAfterMs = hedgeAfterMs;
+    this.log = log;
+  }
+
+  generate(req: GenerateRequest): Promise<GenerateResult> {
+    if (this.hedgeAfterMs <= 0) return this.inner.generate(req);
+    const outer = req.signal;
+    const linked = (c: AbortController) => (outer ? AbortSignal.any([outer, c.signal]) : c.signal);
+    const primary = new AbortController();
+    const backup = new AbortController();
+    const model = req.model ?? this.model;
+    const started = Date.now();
+
+    return new Promise((resolve, reject) => {
+      let timer: NodeJS.Timeout | undefined;
+      let hedged = false;
+      let done = false;
+      let pending = 0;
+      let firstError: unknown;
+
+      const run = (r: GenerateRequest, which: "primary" | "backup") => {
+        pending++;
+        this.inner.generate(r).then(
+          (res) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            (which === "primary" ? backup : primary).abort();
+            if (hedged) this.log(`gemini: ${which} answered after ${Date.now() - started}ms (${model})`);
+            resolve(res);
+          },
+          (err) => {
+            if (done) return;
+            firstError ??= err;
+            pending--;
+            if (which === "primary" && !hedged && !outer?.aborted) return startBackup("primary failed");
+            if (pending === 0) {
+              done = true;
+              clearTimeout(timer);
+              reject(firstError);
+            }
+          },
+        );
+      };
+      const startBackup = (why: string) => {
+        if (hedged || done) return;
+        hedged = true;
+        clearTimeout(timer);
+        this.log(`gemini: backup call at low thinking after ${Date.now() - started}ms, ${why} (${model})`);
+        run({ ...req, thinkingLevel: "low", signal: linked(backup) }, "backup");
+      };
+
+      timer = setTimeout(() => startBackup("no answer yet"), this.hedgeAfterMs);
+      run({ ...req, signal: linked(primary) }, "primary");
+    });
+  }
+}
+
+/**
  * Vertex AI (Google Cloud project + service account / ADC; used on Cloud Run) when
  * GOOGLE_GENAI_USE_VERTEXAI=true, otherwise the Gemini API with GEMINI_API_KEY. Null = AI not configured.
+ * Calls are hedged after GEMINI_HEDGE_MS (0 = off).
  */
 export function createGenerator(config: Config): TextGenerator | null {
   if (config.GOOGLE_GENAI_USE_VERTEXAI) {
@@ -106,10 +181,11 @@ export function createGenerator(config: Config): TextGenerator | null {
       project: config.GOOGLE_CLOUD_PROJECT,
       location: config.GOOGLE_CLOUD_LOCATION,
     });
-    return new GenAIGenerator(ai, config.GEMINI_MODEL, "vertex-ai");
+    return new HedgedGenerator(new GenAIGenerator(ai, config.GEMINI_MODEL, "vertex-ai"), config.GEMINI_HEDGE_MS);
   }
   if (config.GEMINI_API_KEY) {
-    return new GenAIGenerator(new GoogleGenAI({ apiKey: config.GEMINI_API_KEY }), config.GEMINI_MODEL, "gemini-api");
+    const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
+    return new HedgedGenerator(new GenAIGenerator(ai, config.GEMINI_MODEL, "gemini-api"), config.GEMINI_HEDGE_MS);
   }
   return null;
 }
