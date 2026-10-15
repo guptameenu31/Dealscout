@@ -18,6 +18,12 @@ const EnvSchema = z.object({
   GOOGLE_CLOUD_PROJECT: env(z.string().trim().optional()),
   GOOGLE_CLOUD_LOCATION: env(z.string().trim().default("global")),
   GEMINI_MODEL: env(z.string().trim().default("gemini-3.8-flash")),
+  /** Per-step model overrides (see stepModels); each defaults to GEMINI_MODEL. */
+  GEMINI_SPEC_MODEL: env(z.string().trim().optional()),
+  GEMINI_RESEARCH_MODEL: env(z.string().trim().optional()),
+  GEMINI_ADVISOR_MODEL: env(z.string().trim().optional()),
+  /** Serper.dev key for Google Shopping prices (server-side only). Unset = v1 Gemini-only path. */
+  SERPER_API_KEY: env(z.string().trim().optional()),
   /** Max time for one live discovery before falling back. */
   LIVE_TIMEOUT_MS: env(z.coerce.number().int().positive().default(120_000)),
   /** Where the JSON price history and result cache are written (local dev; Firestore later). */

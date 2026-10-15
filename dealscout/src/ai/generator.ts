@@ -16,9 +16,34 @@ export interface GenerateRequest {
   /** Let Gemini use Google Search and return the sources it used. */
   googleSearch?: boolean;
   /** Gemini 3 reasoning depth. "low" is much faster for search/extraction; omitted = model default (high). */
-  thinkingLevel?: "low" | "high";
+  thinkingLevel?: ThinkingDepth;
+  /** Model for this call only; omitted = the generator's default model. */
+  model?: string;
   signal?: AbortSignal;
 }
+
+export type ThinkingDepth = "low" | "medium" | "high";
+
+/** Model + thinking depth for one pipeline step; spread into a GenerateRequest. */
+export interface StepModel {
+  model: string;
+  thinkingLevel: ThinkingDepth;
+}
+
+/** Per-step models (GEMINI_*_MODEL, each defaulting to GEMINI_MODEL). Thinking depths per plan-v1.1 §3. */
+export function stepModels(config: Config): { spec: StepModel; research: StepModel; advisor: StepModel } {
+  return {
+    spec: { model: config.GEMINI_SPEC_MODEL ?? config.GEMINI_MODEL, thinkingLevel: "low" },
+    research: { model: config.GEMINI_RESEARCH_MODEL ?? config.GEMINI_MODEL, thinkingLevel: "medium" },
+    advisor: { model: config.GEMINI_ADVISOR_MODEL ?? config.GEMINI_MODEL, thinkingLevel: "low" },
+  };
+}
+
+const THINKING_LEVELS: Record<ThinkingDepth, ThinkingLevel> = {
+  low: ThinkingLevel.LOW,
+  medium: ThinkingLevel.MEDIUM,
+  high: ThinkingLevel.HIGH,
+};
 
 export interface GenerateResult {
   text: string;
@@ -48,13 +73,13 @@ export class GenAIGenerator implements TextGenerator {
 
   async generate(req: GenerateRequest): Promise<GenerateResult> {
     const res = await this.ai.models.generateContent({
-      model: this.model,
+      model: req.model ?? this.model,
       contents: req.prompt,
       config: {
         abortSignal: req.signal,
         temperature: 0.2, // extraction work: favour consistency over creativity
         ...(req.googleSearch ? { tools: [{ googleSearch: {} }] } : {}),
-        ...(req.thinkingLevel ? { thinkingConfig: { thinkingLevel: req.thinkingLevel === "low" ? ThinkingLevel.LOW : ThinkingLevel.HIGH } } : {}),
+        ...(req.thinkingLevel ? { thinkingConfig: { thinkingLevel: THINKING_LEVELS[req.thinkingLevel] } } : {}),
         ...(req.jsonSchema ? { responseMimeType: "application/json", responseJsonSchema: req.jsonSchema } : {}),
       },
     });

@@ -1,4 +1,4 @@
-import type { TextGenerator } from "./ai/generator.ts";
+import type { StepModel, TextGenerator } from "./ai/generator.ts";
 import type { WatchSpec } from "./types.ts";
 import { DEFAULT_BUDGET, normalizeSpec } from "./watchSpec.ts";
 
@@ -72,10 +72,11 @@ function heuristicResult(query: string): BuiltSpec {
 }
 
 /** Gemini turns plain English into a watch spec; falls back to the heuristic on any failure or without AI. */
-export async function buildWatchSpec(query: string, generator: TextGenerator | null): Promise<BuiltSpec> {
+export async function buildWatchSpec(query: string, generator: TextGenerator | null, step?: StepModel): Promise<BuiltSpec> {
   if (!generator) return heuristicResult(query);
   try {
     const res = await generator.generate({
+      ...step,
       jsonSchema: SPEC_SCHEMA,
       prompt: `Turn this shopping request into a watch spec for Indian retailers. Budget is in INR. Keep must-haves to hard requirements only, phrased as short feature names (e.g. "2 inputs", "48V phantom power"). Only set needsClarification if the request is too vague to search for.
 

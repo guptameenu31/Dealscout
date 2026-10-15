@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GenerateRequest, GenerateResult, TextGenerator } from "../src/ai/generator.ts";
-import { createGenerator } from "../src/ai/generator.ts";
+import { createGenerator, stepModels } from "../src/ai/generator.ts";
 import { loadConfig } from "../src/config.ts";
 import { GeminiSource, linkInSources } from "../src/sources/gemini.ts";
 import { HistoryStore } from "../src/historyStore.ts";
@@ -124,6 +124,27 @@ test("createGenerator picks Vertex AI, API key, or nothing", () => {
   assert.equal(v?.backend, "vertex-ai");
   assert.equal(v?.model, "gemini-3.8-flash");
   assert.throws(() => loadConfig({ GOOGLE_GENAI_USE_VERTEXAI: "true" }), /GOOGLE_CLOUD_PROJECT/);
+});
+
+test("stepModels: per-step models default to GEMINI_MODEL, env overrides win", () => {
+  const def = stepModels(loadConfig({ GEMINI_MODEL: "base", GEMINI_SPEC_MODEL: "" }));
+  assert.deepEqual(def, {
+    spec: { model: "base", thinkingLevel: "low" },
+    research: { model: "base", thinkingLevel: "medium" },
+    advisor: { model: "base", thinkingLevel: "low" },
+  });
+  const set = stepModels(loadConfig({ GEMINI_SPEC_MODEL: "s", GEMINI_RESEARCH_MODEL: "r", GEMINI_ADVISOR_MODEL: "a" }));
+  assert.equal(set.spec.model, "s");
+  assert.equal(set.research.model, "r");
+  assert.equal(set.advisor.model, "a");
+});
+
+test("buildWatchSpec sends the spec step's model and thinking level", async () => {
+  const { gen, requests } = fakeGenerator(new Error("boom"));
+  await buildWatchSpec("audio interface under 15k", gen, { model: "spec-model", thinkingLevel: "low" });
+  assert.equal(requests[0].model, "spec-model");
+  assert.equal(requests[0].thinkingLevel, "low");
+  assert.ok(requests[0].jsonSchema);
 });
 
 test("history store: today excluded, synthetic seeding only when empty", () => {
