@@ -190,3 +190,81 @@ test("GenAIGenerator sends search/schema config to the SDK and reads text + grou
   const empty = new GenAIGenerator({ models: { generateContent: async () => ({ text: "" }) } } as any, "m", "gemini-api");
   await assert.rejects(() => empty.generate({ prompt: "p" }), /empty response/);
 });
+
+// ---------- Hedged calls ----------
+
+/** Fake generator: each call follows the next script step (answer or fail after ms), and honours abort. */
+function scripted(steps: { ms: number; text?: string; fail?: string }[]) {
+  const calls: GenerateRequest[] = [];
+  const gen: TextGenerator = {
+    model: "m",
+    backend: "gemini-api",
+    generate(req) {
+      calls.push(req);
+      const step = steps[calls.length - 1];
+      return new Promise<GenerateResult>((resolve, reject) => {
+        const t = setTimeout(() => (step.fail ? reject(new Error(step.fail)) : resolve({ text: step.text ?? "", sources: [] })), step.ms);
+        req.signal?.addEventListener("abort", () => {
+          clearTimeout(t);
+          reject(new Error("aborted"));
+        });
+      });
+    },
+  };
+  return { gen, calls };
+}
+
+test("HedgedGenerator: a fast answer needs no backup call", async () => {
+  const { HedgedGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = scripted([{ ms: 5, text: "first" }]);
+  const res = await new HedgedGenerator(gen, 50, () => {}).generate({ prompt: "p", thinkingLevel: "medium" });
+  assert.equal(res.text, "first");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].thinkingLevel, "medium");
+});
+
+test("HedgedGenerator: a slow call gets a low-thinking backup; the first answer wins and the other is cancelled", async () => {
+  const { HedgedGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = scripted([{ ms: 1000, text: "slow" }, { ms: 5, text: "backup" }]);
+  const logs: string[] = [];
+  const res = await new HedgedGenerator(gen, 20, (l) => logs.push(l)).generate({ prompt: "p", thinkingLevel: "medium" });
+  assert.equal(res.text, "backup");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].thinkingLevel, "low");
+  assert.equal(calls[1].prompt, "p");
+  assert.equal(calls[0].signal?.aborted, true);
+  assert.match(logs.join("\n"), /backup call at low thinking.*no answer yet[\s\S]*backup answered/);
+});
+
+test("HedgedGenerator: an early failure starts the backup at once", async () => {
+  const { HedgedGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = scripted([{ ms: 1, fail: "429" }, { ms: 1, text: "backup" }]);
+  const started = Date.now();
+  const res = await new HedgedGenerator(gen, 5000, () => {}).generate({ prompt: "p" });
+  assert.equal(res.text, "backup");
+  assert.equal(calls.length, 2);
+  assert.ok(Date.now() - started < 1000);
+});
+
+test("HedgedGenerator: both calls failing rejects with the first error; at most one backup", async () => {
+  const { HedgedGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = scripted([{ ms: 1, fail: "first" }, { ms: 1, fail: "second" }]);
+  await assert.rejects(new HedgedGenerator(gen, 5000, () => {}).generate({ prompt: "p" }), /first/);
+  assert.equal(calls.length, 2);
+});
+
+test("HedgedGenerator: the caller's timeout cancels everything and starts no backup", async () => {
+  const { HedgedGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = scripted([{ ms: 1000, text: "slow" }]);
+  await assert.rejects(new HedgedGenerator(gen, 500, () => {}).generate({ prompt: "p", signal: AbortSignal.timeout(10) }), /aborted/);
+  assert.equal(calls.length, 1);
+});
+
+test("HedgedGenerator: GEMINI_HEDGE_MS=0 passes calls straight through", async () => {
+  const { HedgedGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = scripted([{ ms: 1, fail: "boom" }]);
+  await assert.rejects(new HedgedGenerator(gen, 0, () => {}).generate({ prompt: "p" }), /boom/);
+  assert.equal(calls.length, 1);
+  assert.equal(loadConfig({}).GEMINI_HEDGE_MS, 50_000);
+  assert.equal(loadConfig({ GEMINI_HEDGE_MS: "0" }).GEMINI_HEDGE_MS, 0);
+});
