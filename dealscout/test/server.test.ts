@@ -67,10 +67,13 @@ before(async () => {
 });
 after(() => shared.server.close());
 
-test("GET /healthz", async () => {
+test("GET /healthz and /api/health", async () => {
   const r = await shared.call("GET", "/healthz");
   assert.equal(r.status, 200);
   assert.equal(r.body.ok, true);
+  const api = await shared.call("GET", "/api/health");
+  assert.equal(api.status, 200);
+  assert.equal(api.body.ok, true);
 });
 
 test("POST /api/spec returns a spec", async () => {

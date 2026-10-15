@@ -98,7 +98,7 @@ export function createApp(deps: AppDeps): Express {
       res.type("html").send(
         `<!doctype html><title>DealScout API</title><body style="font-family:system-ui;max-width:560px;margin:48px auto;padding:0 16px">
 <h1>DealScout API is running</h1><p>The web app has not been built yet (expected at <code>${config.WEB_DIST}</code>).</p>
-<p>Try <a href="/healthz">/healthz</a>, or POST to <code>/api/spec</code> and <code>/api/scout</code>.</p></body>`,
+<p>Try <a href="/api/health">/api/health</a>, or POST to <code>/api/spec</code> and <code>/api/scout</code>.</p></body>`,
       );
     });
   }
