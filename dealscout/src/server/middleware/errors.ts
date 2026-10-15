@@ -7,8 +7,10 @@ export const apiNotFound: RequestHandler = (req, _res, next) =>
   next(new AppError(404, "NOT_FOUND", `No API route for ${req.method} ${req.path}`));
 
 /** Every error leaves as { error: { code, message, details? } }. Internals and stack traces are never sent. */
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof AppError) {
+    // Server-side failures (Gemini/Serper errors, timeouts) are only otherwise visible to the client.
+    if (err.status >= 500) console.error(`${req.method} ${req.originalUrl.split("?")[0]} ${err.status} ${err.code}: ${err.message}`);
     res.status(err.status).json({ error: { code: err.code, message: err.message, details: err.details } });
     return;
   }
