@@ -23,7 +23,7 @@ Shopping for a specific need means checking many stores, reading reviews, Reddit
 5. **Prices.** Live Google Shopping listings for India come from [Serper](https://serper.dev), one lookup per model.
 6. **Validate.** Gemini accepts or rejects each listing (accessories, bundles, different models, refurbished). Code then builds every price.
 
-Each result shows the lowest live price and its store, the other stores that sell it, why it fits, each must-have marked confirmed, and a link to the store's offer.
+Each result shows the lowest price from live listings and its store, the other stores that sell it, why it fits, each must-have marked confirmed, and a link to the store's offer.
 
 ### Design principle: the AI advises, code checks the numbers
 
@@ -128,7 +128,7 @@ dealscout/
 ## Status
 
 **Working today**
-- Plain-English request → editable watch spec → researched shortlist → live prices from Indian stores, with evidence for each pick
+- Plain-English request → editable watch spec → researched shortlist → live listings from Indian stores, with evidence for each pick
 - Deployed on Google Cloud Run, using Gemini on Vertex AI
 - Cached research for repeat searches, and clear errors with a retry when a step fails
 
