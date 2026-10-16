@@ -6,6 +6,8 @@ DealScout is an AI shopping advisor for India. You describe what you need and wh
 
 **Live prototype:** https://dealscout-web-eugmzmqdna-el.a.run.app/ (a full search takes about a minute)
 
+**Demo video:** https://drive.google.com/file/d/1aF0zHBZMzMZGKyF3YMHI5AmLXUrE2fNP/view (1.5 minutes)
+
 Built for the Google Cloud AI Builder Cup 2026, category *Retail & Commerce: Intelligent Customer and Business Experiences*.
 
 ## The problem
@@ -21,7 +23,7 @@ Shopping for a specific need means checking many stores, reading reviews, Reddit
 5. **Prices.** Live Google Shopping listings for India come from [Serper](https://serper.dev), one lookup per model.
 6. **Validate.** Gemini accepts or rejects each listing (accessories, bundles, different models, refurbished). Code then builds every price.
 
-Each result shows the lowest live price and its store, the other stores that sell it, why it fits, each must-have marked confirmed, and a link to the store's offer.
+Each result shows the lowest price from live listings and its store, the other stores that sell it, why it fits, each must-have marked confirmed, and a link to the store's offer.
 
 ### Design principle: the AI advises, code checks the numbers
 
@@ -29,7 +31,7 @@ Gemini never produces a price or a link. It only refers to listings by an ID tha
 
 ### Honest about its data
 
-Every response says where it came from: **live**, **cached** (the last live result, when live search fails) or **seeded** (labelled demo data). The UI always shows this.
+Every price in the web app names its store and links to that store's offer, and the results say the prices were checked live. If a step fails, the page says so and offers a retry. The one-call `POST /api/scout` endpoint also reports where its data came from (`live`, `cached` or `seeded` demo data) in a `provenance` field.
 
 ## Architecture
 
@@ -45,7 +47,7 @@ api  (Cloud Run)   Node + Express, TypeScript
   └── Serper                Google Shopping listings for India
 ```
 
-Fallback order for a search: live, then cached, then seeded demo data.
+The web app runs the search step by step (see API below). The one-call `POST /api/scout` endpoint falls back from live, to cached, to seeded demo data.
 
 ## API
 
@@ -126,9 +128,9 @@ dealscout/
 ## Status
 
 **Working today**
-- Plain-English request → editable watch spec → researched shortlist → live prices from Indian stores, with evidence for each pick
+- Plain-English request → editable watch spec → researched shortlist → live listings from Indian stores, with evidence for each pick
 - Deployed on Google Cloud Run, using Gemini on Vertex AI
-- Live, cached and demo-data modes, always labelled
+- Cached research for repeat searches, and clear errors with a retry when a step fails
 
 **Next**
 - Saved watches that keep checking a need, with real price history stored in Firestore
