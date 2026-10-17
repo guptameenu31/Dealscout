@@ -1,4 +1,5 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { setTimeout as delay } from "node:timers/promises";
+import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai";
 import type { Config } from "../config.ts";
 
 /** A web page Google Search returned while grounding an answer. */
@@ -128,11 +129,89 @@ export class GenAIGenerator implements TextGenerator {
 }
 
 /**
+ * The model to switch to when `model` is overloaded: fallbackModel, or defaultModel when the call is already on the
+ * fallback. Vertex capacity is per model, so retrying on the same model at a busy time rarely helps.
+ */
+export function otherModel(model: string, fallbackModel: string | undefined, defaultModel: string): string {
+  if (!fallbackModel) return model;
+  return fallbackModel !== model ? fallbackModel : defaultModel;
+}
+
+/** 408, 429 and 5xx from Gemini, plus network failures (fetch() throws a TypeError). Never aborts or 4xx. */
+export function isRetryable(err: unknown): boolean {
+  if (err instanceof ApiError) return [408, 429, 500, 502, 503, 504].includes(err.status);
+  const name = (err as Error)?.name;
+  if (name === "AbortError" || name === "TimeoutError") return false;
+  return err instanceof TypeError;
+}
+
+const RETRY_BASE_MS = 1_000;
+const RETRY_MAX_MS = 16_000;
+
+const errorSummary = (err: unknown) => (err instanceof ApiError ? String(err.status) : String((err as Error)?.message ?? err).slice(0, 80));
+
+export interface RetryOptions {
+  log?: (line: string) => void;
+  /** Injected in tests. */
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<unknown>;
+  random?: () => number;
+}
+
+/**
+ * Retries transient Gemini failures (429 "Resource exhausted", 5xx, network) with exponential backoff and full
+ * jitter, alternating between the call's model and otherModel(). The thinking level is never changed. The jitter
+ * spreads out the parallel details calls that all get a 429 at the same moment. The caller's signal bounds the whole
+ * thing, including the sleeps.
+ */
+export class RetryingGenerator implements TextGenerator {
+  readonly model: string;
+  readonly backend: "vertex-ai" | "gemini-api";
+  private inner: TextGenerator;
+  private fallbackModel: string | undefined;
+  private attempts: number;
+  private log: (line: string) => void;
+  private sleep: (ms: number, signal?: AbortSignal) => Promise<unknown>;
+  private random: () => number;
+
+  constructor(inner: TextGenerator, fallbackModel: string | undefined, attempts: number, opts: RetryOptions = {}) {
+    this.inner = inner;
+    this.model = inner.model;
+    this.backend = inner.backend;
+    this.fallbackModel = fallbackModel;
+    this.attempts = Math.max(1, attempts);
+    this.log = opts.log ?? console.log;
+    this.sleep = opts.sleep ?? ((ms, signal) => delay(ms, undefined, { signal }));
+    this.random = opts.random ?? Math.random;
+  }
+
+  async generate(req: GenerateRequest): Promise<GenerateResult> {
+    const first = req.model ?? this.model;
+    const models = [first, otherModel(first, this.fallbackModel, this.model)];
+    const what = req.label ?? first;
+    let lastError: unknown;
+    for (let i = 0; i < this.attempts; i++) {
+      const model = models[i % 2];
+      if (i > 0) {
+        const ms = Math.round(this.random() * Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** (i - 1)));
+        this.log(`gemini: ${what}: attempt ${i + 1}/${this.attempts} on ${model} in ${ms}ms after ${errorSummary(lastError)} on ${models[(i - 1) % 2]}`);
+        await this.sleep(ms, req.signal);
+      }
+      try {
+        return await this.inner.generate(i === 0 ? req : { ...req, model, label: `${what} (retry ${i})` });
+      } catch (err) {
+        lastError = err;
+        if (!isRetryable(err) || req.signal?.aborted) throw err;
+      }
+    }
+    throw lastError;
+  }
+}
+
+/**
  * Hedged Gemini calls. Grounded calls sometimes stall until the 120 s step timeout (Oct 15 logs: 502s at exactly
- * 120 s while sibling calls answered in 8-72 s). If a call hasn't answered after hedgeAfterMs, or fails before then,
- * one backup call starts at low thinking; the first answer wins and the other is cancelled.
- * The backup goes to fallbackModel when set: Vertex capacity is per model, and on Oct 15 gemini-3.8-flash returned
- * 429 "Resource exhausted" and ran ~5x slower than other Gemini 3 models.
+ * 120 s while sibling calls answered in 8-72 s), and a stall never errors, so retries can't help. If a call hasn't
+ * answered after hedgeAfterMs, one backup call starts on otherModel() at the same thinking level; the first answer
+ * wins and the other is cancelled. Fast failures are left to the RetryingGenerator inside.
  */
 export class HedgedGenerator implements TextGenerator {
   readonly model: string;
@@ -182,7 +261,6 @@ export class HedgedGenerator implements TextGenerator {
             if (done) return;
             firstError ??= err;
             pending--;
-            if (which === "primary" && !hedged && !outer?.aborted) return startBackup("primary failed");
             if (pending === 0) {
               done = true;
               clearTimeout(timer);
@@ -191,16 +269,15 @@ export class HedgedGenerator implements TextGenerator {
           },
         );
       };
-      const startBackup = (why: string) => {
+      const startBackup = () => {
         if (hedged || done) return;
         hedged = true;
-        clearTimeout(timer);
-        const model = this.fallbackModel ?? req.model ?? this.model;
-        this.log(`gemini: ${what}: backup call on ${model} at low thinking after ${Date.now() - started}ms, ${why}`);
-        run({ ...req, model, thinkingLevel: "low", signal: linked(backup), label: `${what} (backup)` }, "backup");
+        const model = otherModel(req.model ?? this.model, this.fallbackModel, this.model);
+        this.log(`gemini: ${what}: backup call on ${model} after ${Date.now() - started}ms, no answer yet`);
+        run({ ...req, model, signal: linked(backup), label: `${what} (backup)` }, "backup");
       };
 
-      timer = setTimeout(() => startBackup("no answer yet"), this.hedgeAfterMs);
+      timer = setTimeout(startBackup, this.hedgeAfterMs);
       run({ ...req, signal: linked(primary) }, "primary");
     });
   }
@@ -209,10 +286,16 @@ export class HedgedGenerator implements TextGenerator {
 /**
  * Vertex AI (Google Cloud project + service account / ADC; used on Cloud Run) when
  * GOOGLE_GENAI_USE_VERTEXAI=true, otherwise the Gemini API with GEMINI_API_KEY. Null = AI not configured.
- * Calls are hedged after GEMINI_HEDGE_MS (0 = off), with the backup on GEMINI_FALLBACK_MODEL.
+ * Transient failures are retried up to GEMINI_RETRY_ATTEMPTS times and calls are hedged after GEMINI_HEDGE_MS
+ * (0 = off), both switching between the step's model and GEMINI_FALLBACK_MODEL.
  */
 export function createGenerator(config: Config): TextGenerator | null {
-  const hedged = (inner: GenAIGenerator) => new HedgedGenerator(inner, config.GEMINI_HEDGE_MS, config.GEMINI_FALLBACK_MODEL);
+  const hedged = (inner: GenAIGenerator) =>
+    new HedgedGenerator(
+      new RetryingGenerator(inner, config.GEMINI_FALLBACK_MODEL, config.GEMINI_RETRY_ATTEMPTS),
+      config.GEMINI_HEDGE_MS,
+      config.GEMINI_FALLBACK_MODEL,
+    );
   if (config.GOOGLE_GENAI_USE_VERTEXAI) {
     const ai = new GoogleGenAI({
       vertexai: true,

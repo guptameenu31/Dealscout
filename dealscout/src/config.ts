@@ -23,9 +23,11 @@ const EnvSchema = z.object({
   GEMINI_RESEARCH_MODEL: env(z.string().trim().optional()),
   GEMINI_ADVISOR_MODEL: env(z.string().trim().optional()),
   GEMINI_VALIDATOR_MODEL: env(z.string().trim().optional()),
-  /** Start a backup Gemini call (low thinking) when one hasn't answered after this many ms. 0 disables. */
+  /** Start a backup Gemini call on the other model when one hasn't answered after this many ms. 0 disables. */
   GEMINI_HEDGE_MS: env(z.coerce.number().int().nonnegative().default(50_000)),
-  /** Model for that backup call (must support Google Search + JSON schema together). Set to GEMINI_MODEL to keep one model. */
+  /** Attempts per Gemini call (incl. the first) on 429/5xx/network errors, with backoff + jitter. 1 = no retries. */
+  GEMINI_RETRY_ATTEMPTS: env(z.coerce.number().int().min(1).default(4)),
+  /** Model that retries and backup calls switch to (must support Google Search + JSON schema together). Set to GEMINI_MODEL to keep one model. */
   GEMINI_FALLBACK_MODEL: env(z.string().trim().default("gemini-3.7-flash")),
   /** Serper.dev key for Google Shopping prices (server-side only). Unset = v1 Gemini-only path. */
   SERPER_API_KEY: env(z.string().trim().optional()),

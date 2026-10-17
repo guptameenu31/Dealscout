@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ApiError } from "@google/genai";
 import type { GenerateRequest, GenerateResult, TextGenerator } from "../src/ai/generator.ts";
 import { createGenerator, stepModels } from "../src/ai/generator.ts";
 import { loadConfig } from "../src/config.ts";
@@ -246,33 +247,33 @@ test("HedgedGenerator: a fast answer needs no backup call", async () => {
   assert.equal(calls[0].thinkingLevel, "medium");
 });
 
-test("HedgedGenerator: a slow call gets a low-thinking backup; the first answer wins and the other is cancelled", async () => {
+test("HedgedGenerator: a slow call gets a backup on the other model at the same thinking; the first answer wins", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
   const { gen, calls } = scripted([{ ms: 1000, text: "slow" }, { ms: 5, text: "backup" }]);
   const logs: string[] = [];
-  const res = await new HedgedGenerator(gen, 20, undefined, (l) => logs.push(l)).generate({ prompt: "p", thinkingLevel: "medium" });
+  const res = await new HedgedGenerator(gen, 20, "fb", (l) => logs.push(l)).generate({ prompt: "p", thinkingLevel: "medium", label: "shortlist" });
   assert.equal(res.text, "backup");
   assert.equal(calls.length, 2);
-  assert.equal(calls[1].thinkingLevel, "low");
+  assert.equal(calls[1].model, "fb");
+  assert.equal(calls[1].thinkingLevel, "medium");
   assert.equal(calls[1].prompt, "p");
+  assert.equal(calls[1].label, "shortlist (backup)");
   assert.equal(calls[0].signal?.aborted, true);
-  assert.match(logs.join("\n"), /backup call on m at low thinking.*no answer yet[\s\S]*backup answered/);
+  assert.match(logs.join("\n"), /shortlist: backup call on fb after \d+ms, no answer yet[\s\S]*backup answered/);
 });
 
-test("HedgedGenerator: an early failure starts the backup at once", async () => {
+test("HedgedGenerator: a fast failure is left to the retry layer and starts no backup", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
-  const { gen, calls } = scripted([{ ms: 1, fail: "429" }, { ms: 1, text: "backup" }]);
-  const started = Date.now();
-  const res = await new HedgedGenerator(gen, 5000, undefined, () => {}).generate({ prompt: "p" });
-  assert.equal(res.text, "backup");
-  assert.equal(calls.length, 2);
-  assert.ok(Date.now() - started < 1000);
+  const { gen, calls } = scripted([{ ms: 1, fail: "first" }, { ms: 1, text: "backup" }]);
+  await assert.rejects(new HedgedGenerator(gen, 50, "fb", () => {}).generate({ prompt: "p" }), /first/);
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(calls.length, 1);
 });
 
 test("HedgedGenerator: both calls failing rejects with the first error; at most one backup", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
-  const { gen, calls } = scripted([{ ms: 1, fail: "first" }, { ms: 1, fail: "second" }]);
-  await assert.rejects(new HedgedGenerator(gen, 5000, undefined, () => {}).generate({ prompt: "p" }), /first/);
+  const { gen, calls } = scripted([{ ms: 60, fail: "first" }, { ms: 60, fail: "second" }]);
+  await assert.rejects(new HedgedGenerator(gen, 20, "fb", () => {}).generate({ prompt: "p" }), /first/);
   assert.equal(calls.length, 2);
 });
 
@@ -292,16 +293,96 @@ test("HedgedGenerator: GEMINI_HEDGE_MS=0 passes calls straight through", async (
   assert.equal(loadConfig({ GEMINI_HEDGE_MS: "0" }).GEMINI_HEDGE_MS, 0);
 });
 
-test("HedgedGenerator: the backup call goes to the fallback model; createGenerator defaults it to gemini-3.7-flash", async () => {
+test("HedgedGenerator: a call already on the fallback model backs up on GEMINI_MODEL; config defaults", async () => {
   const { HedgedGenerator } = await import("../src/ai/generator.ts");
-  const { gen, calls } = scripted([{ ms: 1, fail: "429 Resource exhausted" }, { ms: 1, text: "fallback" }]);
-  const logs: string[] = [];
-  const res = await new HedgedGenerator(gen, 5000, "gemini-3.7-flash", (l) => logs.push(l)).generate({ prompt: "p", model: "gemini-3.8-flash", label: "shortlist" });
-  assert.equal(res.text, "fallback");
-  assert.equal(calls[0].model, "gemini-3.8-flash");
-  assert.equal(calls[1].model, "gemini-3.7-flash");
-  assert.equal(calls[1].label, "shortlist (backup)");
-  assert.match(logs[0], /shortlist: backup call on gemini-3\.7-flash at low thinking after \d+ms, primary failed/);
+  const { gen, calls } = scripted([{ ms: 1000, text: "slow" }, { ms: 1, text: "main" }]);
+  const res = await new HedgedGenerator(gen, 20, "gemini-3.7-flash", () => {}).generate({ prompt: "p", model: "gemini-3.7-flash" });
+  assert.equal(res.text, "main");
+  assert.equal(calls[1].model, "m");
   assert.equal(loadConfig({}).GEMINI_FALLBACK_MODEL, "gemini-3.7-flash");
   assert.equal(loadConfig({ GEMINI_FALLBACK_MODEL: "x" }).GEMINI_FALLBACK_MODEL, "x");
+});
+
+// ---------- Retries ----------
+
+/** Fake generator that throws the queued errors in order, then answers; records requests. */
+function failing(...errors: Error[]) {
+  const calls: GenerateRequest[] = [];
+  const gen: TextGenerator = {
+    model: "gemini-3.8-flash",
+    backend: "vertex-ai",
+    async generate(req) {
+      calls.push(req);
+      const err = errors[calls.length - 1];
+      if (err) throw err;
+      return { text: "ok", sources: [] };
+    },
+  };
+  return { gen, calls };
+}
+
+const apiError = (status: number) => new ApiError({ message: `status ${status}`, status });
+
+test("RetryingGenerator: 429s alternate between the step model and the fallback, keeping the thinking level", async () => {
+  const { RetryingGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = failing(apiError(429), apiError(503));
+  const delays: number[] = [];
+  const logs: string[] = [];
+  const retrying = new RetryingGenerator(gen, "gemini-3.7-flash", 4, {
+    log: (l) => logs.push(l),
+    sleep: async (ms) => void delays.push(ms),
+    random: () => 0.5,
+  });
+  const res = await retrying.generate({ prompt: "p", thinkingLevel: "medium", label: "details: X" });
+  assert.equal(res.text, "ok");
+  assert.deepEqual(calls.map((c) => c.model), [undefined, "gemini-3.7-flash", "gemini-3.8-flash"]);
+  assert.deepEqual(calls.map((c) => c.thinkingLevel), ["medium", "medium", "medium"]);
+  assert.equal(calls[1].label, "details: X (retry 1)");
+  assert.deepEqual(delays, [500, 1000]); // full jitter: random * min(16 s, 1 s * 2^(i-1))
+  assert.match(logs[0], /details: X: attempt 2\/4 on gemini-3\.7-flash in 500ms after 429 on gemini-3\.8-flash/);
+});
+
+test("RetryingGenerator: backoff is capped; giving up rejects with the last error", async () => {
+  const { RetryingGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = failing(...Array.from({ length: 8 }, (_, i) => apiError(i === 7 ? 504 : 429)));
+  const delays: number[] = [];
+  const retrying = new RetryingGenerator(gen, "fb", 8, { log: () => {}, sleep: async (ms) => void delays.push(ms), random: () => 1 });
+  await assert.rejects(retrying.generate({ prompt: "p" }), /status 504/);
+  assert.equal(calls.length, 8);
+  assert.deepEqual(delays, [1000, 2000, 4000, 8000, 16000, 16000, 16000]);
+});
+
+test("RetryingGenerator: non-retryable errors and GEMINI_RETRY_ATTEMPTS=1 fail at once", async () => {
+  const { RetryingGenerator } = await import("../src/ai/generator.ts");
+  const opts = { log: () => {}, sleep: async () => {} };
+  for (const err of [apiError(400), apiError(404), new Error("Gemini returned an empty response")]) {
+    const { gen, calls } = failing(err);
+    await assert.rejects(new RetryingGenerator(gen, "fb", 4, opts).generate({ prompt: "p" }));
+    assert.equal(calls.length, 1);
+  }
+  const { gen, calls } = failing(apiError(429));
+  await assert.rejects(new RetryingGenerator(gen, "fb", 1, opts).generate({ prompt: "p" }), /status 429/);
+  assert.equal(calls.length, 1);
+  const network = failing(new TypeError("fetch failed"));
+  await new RetryingGenerator(network.gen, "fb", 4, opts).generate({ prompt: "p" });
+  assert.equal(network.calls.length, 2);
+  assert.equal(loadConfig({}).GEMINI_RETRY_ATTEMPTS, 4);
+  assert.equal(loadConfig({ GEMINI_RETRY_ATTEMPTS: "1" }).GEMINI_RETRY_ATTEMPTS, 1);
+});
+
+test("RetryingGenerator: the caller's timeout cancels the backoff sleep and makes no more calls", async () => {
+  const { RetryingGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = failing(apiError(429), apiError(429));
+  const started = Date.now();
+  const retrying = new RetryingGenerator(gen, "fb", 4, { log: () => {}, random: () => 1 }); // real 1 s sleep
+  await assert.rejects(retrying.generate({ prompt: "p", signal: AbortSignal.timeout(30) }));
+  assert.ok(Date.now() - started < 500);
+  assert.equal(calls.length, 1);
+});
+
+test("RetryingGenerator: a call already on the fallback model retries on GEMINI_MODEL", async () => {
+  const { RetryingGenerator } = await import("../src/ai/generator.ts");
+  const { gen, calls } = failing(apiError(429));
+  await new RetryingGenerator(gen, "gemini-3.7-flash", 4, { log: () => {}, sleep: async () => {} }).generate({ prompt: "p", model: "gemini-3.7-flash" });
+  assert.deepEqual(calls.map((c) => c.model), ["gemini-3.7-flash", "gemini-3.8-flash"]);
 });
